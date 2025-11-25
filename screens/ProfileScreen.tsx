@@ -1,194 +1,226 @@
-import { useState } from "react";
-import { StyleSheet, View, TextInput } from "react-native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-
-import { ScreenKeyboardAwareScrollView } from "@/components/ScreenKeyboardAwareScrollView";
+import React from "react";
+import { StyleSheet, Pressable, View, Switch } from "react-native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Feather } from '@expo/vector-icons';
 import { ThemedText } from "@/components/ThemedText";
-import { Button } from "@/components/Button";
-import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius, Typography } from "@/constants/theme";
+import { ThemedView } from "@/components/ThemedView";
+import { ScreenScrollView } from "@/components/ScreenScrollView";
 import Spacer from "@/components/Spacer";
-import type { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
+import { Spacing, Typography, BorderRadius } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { useUserData } from "@/hooks/useUserData";
+import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
 
 type ProfileScreenProps = {
   navigation: NativeStackNavigationProp<ProfileStackParamList, "Profile">;
 };
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
+  const { profile, financial, setFinancial } = useUserData();
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  const handleSubmit = () => {
-    console.log("Form submitted:", { name, email, password });
+  const toggleSubscription = (id: string) => {
+    setFinancial({
+      ...financial,
+      subscriptions: financial.subscriptions.map((sub) =>
+        sub.id === id ? { ...sub, active: !sub.active } : sub
+      ),
+    });
   };
 
-  const inputStyle = [
-    styles.input,
-    {
-      backgroundColor: theme.backgroundDefault,
-      color: theme.text,
-    },
-  ];
+  const cancelledSubscriptions = financial.subscriptions.filter((s) => !s.active);
+  const savings = cancelledSubscriptions.reduce((sum, sub) => sum + sub.cost, 0);
 
   return (
-    <ScreenKeyboardAwareScrollView>
-      <View style={styles.section}>
-        <ThemedText type="h1">Heading 1</ThemedText>
-        <ThemedText type="small" style={styles.meta}>
-          32px • Bold
-        </ThemedText>
-      </View>
-
-      <View style={styles.section}>
-        <ThemedText type="h2">Heading 2</ThemedText>
-        <ThemedText type="small" style={styles.meta}>
-          28px • Bold
-        </ThemedText>
-      </View>
-
-      <View style={styles.section}>
-        <ThemedText type="h3">Heading 3</ThemedText>
-        <ThemedText type="small" style={styles.meta}>
-          24px • Semi-Bold
-        </ThemedText>
-      </View>
-
-      <View style={styles.section}>
-        <ThemedText type="h4">Heading 4</ThemedText>
-        <ThemedText type="small" style={styles.meta}>
-          20px • Semi-Bold
-        </ThemedText>
-      </View>
-
-      <View style={styles.section}>
-        <ThemedText type="body">
-          Body text - This is the default text style for paragraphs and general
-          content.
-        </ThemedText>
-        <ThemedText type="small" style={styles.meta}>
-          16px • Regular
-        </ThemedText>
-      </View>
-
-      <View style={styles.section}>
-        <ThemedText type="small">
-          Small text - Used for captions, labels, and secondary information.
-        </ThemedText>
-        <ThemedText type="small" style={styles.meta}>
-          14px • Regular
-        </ThemedText>
-      </View>
-
-      <View style={styles.section}>
-        <ThemedText type="link">Link text - Interactive elements</ThemedText>
-        <ThemedText type="small" style={styles.meta}>
-          16px • Regular • Colored
-        </ThemedText>
-      </View>
-
-      <Spacer height={Spacing["4xl"]} />
-
-      <View style={styles.fieldContainer}>
-        <ThemedText type="small" style={styles.label}>
-          Name
-        </ThemedText>
-        <TextInput
-          style={inputStyle}
-          value={name}
-          onChangeText={setName}
-          placeholder="Enter your name"
-          placeholderTextColor={isDark ? "#9BA1A6" : "#687076"}
-          autoCapitalize="words"
-          returnKeyType="next"
-        />
-      </View>
-
-      <Spacer height={Spacing.lg} />
-
-      <View style={styles.fieldContainer}>
-        <ThemedText type="small" style={styles.label}>
-          Email
-        </ThemedText>
-        <TextInput
-          style={inputStyle}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="your.email@example.com"
-          placeholderTextColor={isDark ? "#9BA1A6" : "#687076"}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          returnKeyType="next"
-        />
-      </View>
-
-      <Spacer height={Spacing.lg} />
-
-      <View style={styles.fieldContainer}>
-        <ThemedText type="small" style={styles.label}>
-          Password
-        </ThemedText>
-        <TextInput
-          style={inputStyle}
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Enter a password"
-          placeholderTextColor={isDark ? "#9BA1A6" : "#687076"}
-          secureTextEntry
-          autoCapitalize="none"
-          returnKeyType="next"
-        />
-      </View>
-
-      <Spacer height={Spacing.lg} />
-
-      <Button onPress={handleSubmit}>Submit Form</Button>
-
-      <Spacer height={Spacing["2xl"]} />
-
-      <ThemedText type="h3" style={styles.sectionTitle}>
-        Testing
-      </ThemedText>
+    <ScreenScrollView>
       <Spacer height={Spacing.md} />
-      <Button
-        onPress={() => navigation.navigate("Crash")}
-        style={styles.crashButton}
-      >
-        Crash App
-      </Button>
-    </ScreenKeyboardAwareScrollView>
+
+      <View style={styles.header}>
+        <View style={[styles.avatar, { backgroundColor: theme.primary + '20' }]}>
+          <ThemedText style={[styles.avatarText, { color: theme.primary }]}>
+            {profile.name.charAt(0).toUpperCase()}
+          </ThemedText>
+        </View>
+
+        <Spacer height={Spacing.md} />
+
+        <ThemedText style={styles.name}>{profile.name}</ThemedText>
+      </View>
+
+      <Spacer height={Spacing.xl} />
+
+      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.cardHeader}>
+          <ThemedText style={styles.cardTitle}>Financial Overview</ThemedText>
+          <Pressable onPress={() => navigation.navigate('Settings')}>
+            <Feather name="settings" size={20} color={theme.textSecondary} />
+          </Pressable>
+        </View>
+
+        <Spacer height={Spacing.lg} />
+
+        <View style={styles.financialRow}>
+          <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
+            Monthly Income
+          </ThemedText>
+          <ThemedText style={styles.financialValue}>
+            £{financial.monthlyIncome.toLocaleString()}
+          </ThemedText>
+        </View>
+
+        <Spacer height={Spacing.md} />
+
+        <View style={styles.financialRow}>
+          <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
+            Monthly Expenses
+          </ThemedText>
+          <ThemedText style={styles.financialValue}>
+            £{financial.monthlyExpenses.toLocaleString()}
+          </ThemedText>
+        </View>
+
+        <Spacer height={Spacing.md} />
+
+        <View style={styles.financialRow}>
+          <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
+            Total Debt
+          </ThemedText>
+          <ThemedText style={styles.financialValue}>
+            £{financial.totalDebt.toLocaleString()}
+          </ThemedText>
+        </View>
+
+        <Spacer height={Spacing.md} />
+
+        <View style={styles.financialRow}>
+          <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
+            Savings Goal
+          </ThemedText>
+          <ThemedText style={styles.financialValue}>
+            £{financial.currentSavings.toLocaleString()} / £
+            {financial.savingsGoal.toLocaleString()}
+          </ThemedText>
+        </View>
+      </ThemedView>
+
+      <Spacer height={Spacing.lg} />
+
+      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <ThemedText style={styles.cardTitle}>Subscriptions</ThemedText>
+
+        <Spacer height={Spacing.lg} />
+
+        {financial.subscriptions.map((sub) => (
+          <React.Fragment key={sub.id}>
+            <View style={styles.subscriptionRow}>
+              <View style={styles.subscriptionInfo}>
+                <ThemedText style={styles.subscriptionName}>{sub.name}</ThemedText>
+                <ThemedText style={[styles.subscriptionCost, { color: theme.textSecondary }]}>
+                  £{sub.cost.toFixed(2)}/month
+                </ThemedText>
+              </View>
+
+              <Switch
+                value={sub.active}
+                onValueChange={() => toggleSubscription(sub.id)}
+                trackColor={{ false: theme.border, true: theme.primary }}
+                thumbColor={theme.card}
+              />
+            </View>
+
+            <Spacer height={Spacing.md} />
+          </React.Fragment>
+        ))}
+
+        {savings > 0 ? (
+          <>
+            <Spacer height={Spacing.md} />
+
+            <View style={[styles.savingsCalculator, { backgroundColor: theme.success + '20' }]}>
+              <Feather name="info" size={20} color={theme.success} />
+              <Spacer width={Spacing.md} />
+              <ThemedText style={[styles.savingsText, { color: theme.success }]}>
+                By cancelling {cancelledSubscriptions.length} subscription
+                {cancelledSubscriptions.length !== 1 ? 's' : ''}, you save £
+                {savings.toFixed(2)}/month
+              </ThemedText>
+            </View>
+          </>
+        ) : null}
+      </ThemedView>
+
+      <Spacer height={Spacing.xl} />
+    </ScreenScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  section: {
-    marginBottom: Spacing["3xl"],
-  },
-  meta: {
-    opacity: 0.5,
-    marginTop: Spacing.sm,
-  },
-  fieldContainer: {
-    width: "100%",
-  },
-  label: {
-    marginBottom: Spacing.sm,
-    fontWeight: "600",
-    opacity: 0.8,
-  },
-  input: {
-    height: Spacing.inputHeight,
-    borderWidth: 0,
-    borderRadius: BorderRadius.md,
+  header: {
+    alignItems: 'center',
     paddingHorizontal: Spacing.lg,
-    fontSize: Typography.body.fontSize,
   },
-  sectionTitle: {
-    marginTop: Spacing.xl,
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  crashButton: {
-    backgroundColor: "#FF3B30",
+  avatarText: {
+    fontSize: 32,
+    fontWeight: '600',
+  },
+  name: {
+    ...Typography.title,
+  },
+  card: {
+    marginHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.lg,
+    borderWidth: 1,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cardTitle: {
+    ...Typography.headline,
+  },
+  financialRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  financialLabel: {
+    ...Typography.body,
+  },
+  financialValue: {
+    ...Typography.body,
+    fontWeight: '600',
+  },
+  subscriptionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  subscriptionInfo: {
+    flex: 1,
+  },
+  subscriptionName: {
+    ...Typography.body,
+    marginBottom: Spacing.xs,
+  },
+  subscriptionCost: {
+    ...Typography.footnote,
+  },
+  savingsCalculator: {
+    flexDirection: 'row',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+  },
+  savingsText: {
+    ...Typography.subhead,
+    flex: 1,
   },
 });

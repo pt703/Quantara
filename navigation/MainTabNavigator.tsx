@@ -4,11 +4,15 @@ import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Platform, StyleSheet } from "react-native";
 import HomeStackNavigator from "@/navigation/HomeStackNavigator";
+import LearnStackNavigator from "@/navigation/LearnStackNavigator";
+import ChallengesStackNavigator from "@/navigation/ChallengesStackNavigator";
 import ProfileStackNavigator from "@/navigation/ProfileStackNavigator";
 import { useTheme } from "@/hooks/useTheme";
 
 export type MainTabParamList = {
   HomeTab: undefined;
+  LearnTab: undefined;
+  ChallengesTab: undefined;
   ProfileTab: undefined;
 };
 
@@ -50,6 +54,26 @@ export default function MainTabNavigator() {
           title: "Home",
           tabBarIcon: ({ color, size }) => (
             <Feather name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="LearnTab"
+        component={LearnStackNavigator}
+        options={{
+          title: "Learn",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="book-open" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="ChallengesTab"
+        component={ChallengesStackNavigator}
+        options={{
+          title: "Challenges",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="target" size={size} color={color} />
           ),
         }}
       />
