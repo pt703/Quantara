@@ -1,0 +1,175 @@
+Project: Quantara – Adaptive Financial Literacy Learning App
+Tech stack: React Native + Expo + TypeScript
+I want you to generate a React Native + Expo app (TypeScript) that I can later open in VS Code and continue developing. The app is called Quantara and it is an adaptive financial education application. For now, you should implement a clean, production-style prototype with mocked data and simple local state (no real backend required yet), but structure the code so it will be easy to plug in real APIs and reinforcement-learning logic later.
+🔧 Technical requirements
+Use Expo and TypeScript
+Use React Navigation (stack + bottom tab or stack + nested stacks)
+Use functional components with React Hooks
+Use a simple structure like:
+App.tsx
+src/navigation/
+src/screens/
+src/components/
+src/hooks/
+src/types/
+src/mock/ (for fake data)
+For local data, use mock JSON or in-memory arrays. If needed, use AsyncStorage for simple persistence.
+Keep styling clean and modern (no UI library required, just StyleSheet), but make the layout look like a real app, not just raw text.
+📱 Core concept of Quantara
+Quantara is an app that helps young adults build financial literacy and better money habits through:
+Bite-sized lessons and quizzes
+Interactive challenges (e.g., “cancel one unused subscription this week”)
+A simple financial snapshot (loans, subscriptions, savings goal)
+A “Recommended for you” section that will later be driven by RL, but for now should be mocked.
+This prototype does not need real banks, real money, or real RL — just believable structure and UI.
+🧭 Navigation & Screens
+Implement at least the following screens with navigation wired up:
+1. Onboarding / Welcome Screen
+Name: WelcomeScreen
+Content:
+App name: Quantara
+Short tagline: “Adaptive financial coaching for your real life.”
+Two buttons: “Get Started” and “Log In” (both can just navigate into the main app for now).
+Design: clean, simple illustration-like blocks using basic shapes or gradients, no images required.
+2. Home / Dashboard Screen
+Name: HomeScreen
+This is the main landing page after onboarding.
+Show:
+A greeting: “Hi, Nemo” (hardcoded name is fine for now, but structure it so it can be changed later).
+A “Financial Snapshot” card with:
+Monthly income (mock)
+Total debt (mock)
+Active subscriptions count (mock)
+Current savings goal and % progress (mock)
+A “Continue Learning” card: shows the next lesson title + progress bar (e.g., “Understanding Interest Rates – 40% complete”).
+A “Recommended for you” section:
+2–3 cards with:
+Lesson name (e.g., “Student Loans Basics”)
+Tag: “Lesson” / “Challenge” / “Simulation”
+Short description (1–2 lines)
+A “Start” button that navigates to the appropriate screen.
+Use mock data from a mock/recommendations.ts file.
+3. Learn: Modules & Lessons
+You can implement this as a separate tab or screen.
+3.1 Learn Overview Screen
+Name: LearnScreen
+List of modules, e.g.:
+“Foundations: Budgeting & Saving”
+“Debt & Interest”
+“Investing Basics”
+Each module shows:
+Progress % (mocked)
+Number of completed lessons / total lessons
+On press → navigate to ModuleDetailScreen.
+3.2 Module Detail Screen
+Name: ModuleDetailScreen
+Shows:
+Module title and short description
+List of lessons in this module (pulled from mock data)
+Example lesson fields:
+id
+title
+type ("lesson" | "quiz" | "simulation")
+estimatedMinutes
+completionStatus
+On tap a lesson → navigate to LessonScreen.
+3.3 Lesson / Quiz Screen
+Name: LessonScreen
+For a lesson:
+Show content as a vertical scroll:
+Title
+2–3 short paragraphs of placeholder text about a topic (e.g., “What is compound interest?”).
+At the bottom, a “Mark as Complete” button. For now, use local state to mark that lesson as complete and update UI.
+For a quiz:
+Mock 3–4 multiple-choice questions (static JSON).
+Show radio buttons / touchable options.
+Simple scoring logic (count correct answers and show score summary).
+At the end, show:
+Score
+Simple feedback text: “Great job!” / “Review this again later.”
+No backend required.
+4. Challenges / Habits Screen
+Name: ChallengesScreen
+Purpose: show behaviour-oriented tasks, not just knowledge.
+Each challenge card has:
+Title (e.g., “Track every expense for 3 days”)
+Category (e.g., “Spending”, “Debt”, “Subscriptions”)
+Status: “Not started”, “In progress”, “Completed”
+Allow the user to tap a challenge to view details (ChallengeDetailScreen), and toggle its status through local state (e.g., mark as completed).
+We will later connect this to habit-tracking and RL-based recommendations, so structure the data model cleanly.
+5. Financial Snapshot / Profile Screen
+You can combine into one screen, or keep separate.
+Name: ProfileScreen or SnapshotScreen
+Show:
+Editable mock data for:
+Monthly income
+Monthly expenses
+Total debt (e.g., student loan + credit card)
+Subscriptions (e.g., Netflix, Spotify)
+For now, use simple UI:
+List of subscriptions with name + monthly cost + toggle for “keep/cancel” (local only).
+Optional: a simple “What if?” area:
+Text: “If you cancelled these 2 subscriptions, you would save £X/month.”
+The number £X is computed from the toggled items.
+This doesn’t need to store to a backend; just manage state.
+6. Settings Screen
+Name: SettingsScreen
+Minimal:
+“Notification preferences” (toggles, not functional)
+“Data & Privacy” (static text)
+“Log out” (can just show an alert or navigate back to WelcomeScreen)
+🧩 Data & Types (for the AI to structure nicely)
+Use TypeScript types like:
+type LessonType = 'lesson' | 'quiz' | 'simulation';
+
+interface Lesson {
+  id: string;
+  title: string;
+  type: LessonType;
+  estimatedMinutes: number;
+  completionStatus: 'not_started' | 'in_progress' | 'completed';
+}
+
+interface Module {
+  id: string;
+  title: string;
+  description: string;
+  progress: number; // 0–100
+  lessons: Lesson[];
+}
+
+interface Challenge {
+  id: string;
+  title: string;
+  category: 'spending' | 'debt' | 'subscriptions' | 'saving';
+  status: 'not_started' | 'in_progress' | 'completed';
+  description: string;
+}
+
+interface Recommendation {
+  id: string;
+  title: string;
+  kind: 'lesson' | 'challenge' | 'simulation';
+  shortDescription: string;
+}
+Put mock data into src/mock/modules.ts, src/mock/challenges.ts, src/mock/recommendations.ts.
+🎨 Design style
+Clean, minimal, modern.
+Use:
+Cards with rounded corners
+Soft shadows or borders
+Progress bars for modules/lessons where relevant
+No need for fancy animation; just make it feel like a real app you’d actually ship.
+🚀 Final Expected Output
+A React Native + Expo TypeScript project that:
+Compiles and runs with npm start / expo start
+Has working navigation between:
+Welcome → Home → Learn → Module → Lesson
+Home → Challenges → Challenge Detail
+Home → Snapshot/Profile
+Settings
+Uses mock data + local state
+Is clearly structured so I can later:
+Replace mock data with real API calls
+Add RL logic for content selection
+Integrate authentication and real persistence
