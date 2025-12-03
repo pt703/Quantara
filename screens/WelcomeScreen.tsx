@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Image, Pressable, ScrollView } from 'react-native';
+import { View, StyleSheet, Image, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -21,7 +21,7 @@ function FeatureItem({ icon, iconColor, iconBackground, title, description }: Fe
   return (
     <View style={styles.featureItem}>
       <View style={[styles.featureIconContainer, { backgroundColor: iconBackground }]}>
-        <Feather name={icon} size={22} color={iconColor} />
+        <Feather name={icon} size={20} color={iconColor} />
       </View>
       <View style={styles.featureTextContainer}>
         <ThemedText style={styles.featureTitle}>{title}</ThemedText>
@@ -71,37 +71,38 @@ export default function WelcomeScreen() {
   ];
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ScrollView 
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: insets.top + Spacing.xl }
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.headerSection}>
-          <View style={styles.logoContainer}>
-            <Image
-              source={require('../assets/images/quantara-logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
-
-          <ThemedText style={styles.title}>Quantara</ThemedText>
-          <ThemedText style={[styles.tagline, { color: theme.textSecondary }]}>
-            Your path to financial confidence starts here
-          </ThemedText>
+    <View 
+      style={[
+        styles.container, 
+        { 
+          backgroundColor: theme.background,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+        }
+      ]}
+    >
+      <View style={styles.headerSection}>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../assets/images/quantara-logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
 
-        <View style={styles.featuresSection}>
-          {features.map((feature, index) => (
-            <FeatureItem key={index} {...feature} />
-          ))}
-        </View>
-      </ScrollView>
+        <ThemedText style={styles.title}>Quantara</ThemedText>
+        <ThemedText style={[styles.tagline, { color: theme.textSecondary }]}>
+          Your path to financial confidence starts here
+        </ThemedText>
+      </View>
 
-      <View style={[styles.buttonContainer, { paddingBottom: insets.bottom + Spacing.xl }]}>
+      <View style={styles.featuresSection}>
+        {features.map((feature, index) => (
+          <FeatureItem key={index} {...feature} />
+        ))}
+      </View>
+
+      <View style={styles.buttonSection}>
         <Pressable
           style={({ pressed }) => [
             styles.primaryButton,
@@ -137,39 +138,36 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
     paddingHorizontal: Spacing.xl,
+    justifyContent: 'space-between',
   },
   headerSection: {
     alignItems: 'center',
-    marginBottom: Spacing['2xl'],
+    paddingTop: Spacing.xl,
   },
   logoContainer: {
-    width: 120,
-    height: 120,
-    marginBottom: Spacing.xl,
+    width: 100,
+    height: 100,
+    marginBottom: Spacing.lg,
   },
   logo: {
     width: '100%',
     height: '100%',
   },
   title: {
-    ...Typography.largeTitle,
-    fontSize: 36,
-    fontWeight: '700',
+    fontSize: 44,
+    fontWeight: '800',
+    letterSpacing: -1,
     marginBottom: Spacing.sm,
   },
   tagline: {
     ...Typography.body,
-    fontSize: 17,
+    fontSize: 16,
     textAlign: 'center',
-    maxWidth: 300,
-    lineHeight: 24,
+    maxWidth: 280,
+    lineHeight: 22,
   },
   featuresSection: {
-    marginTop: Spacing.lg,
     gap: Spacing.lg,
   },
   featureItem: {
@@ -178,9 +176,9 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   featureIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -190,19 +188,18 @@ const styles = StyleSheet.create({
   },
   featureTitle: {
     ...Typography.headline,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   featureDescription: {
     ...Typography.subhead,
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 14,
+    lineHeight: 20,
   },
-  buttonContainer: {
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
+  buttonSection: {
     gap: Spacing.md,
+    paddingBottom: Spacing.lg,
   },
   primaryButton: {
     height: 52,
