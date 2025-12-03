@@ -6,6 +6,7 @@ import { Platform, StyleSheet } from "react-native";
 import HomeStackNavigator from "@/navigation/HomeStackNavigator";
 import LearnStackNavigator from "@/navigation/LearnStackNavigator";
 import ChallengesStackNavigator from "@/navigation/ChallengesStackNavigator";
+import SocialStackNavigator from "@/navigation/SocialStackNavigator";
 import ProfileStackNavigator from "@/navigation/ProfileStackNavigator";
 import { useTheme } from "@/hooks/useTheme";
 
@@ -13,6 +14,7 @@ export type MainTabParamList = {
   HomeTab: undefined;
   LearnTab: undefined;
   ChallengesTab: undefined;
+  SocialTab: undefined;
   ProfileTab: undefined;
 };
 
@@ -74,6 +76,16 @@ export default function MainTabNavigator() {
           title: "Challenges",
           tabBarIcon: ({ color, size }) => (
             <Feather name="target" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="SocialTab"
+        component={SocialStackNavigator}
+        options={{
+          title: "Social",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="users" size={size} color={color} />
           ),
         }}
       />

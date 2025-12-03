@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Image, Pressable, LinearGradient } from 'react-native';
+import { View, StyleSheet, Image, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
@@ -26,20 +26,10 @@ export default function WelcomeScreen() {
           />
         </View>
 
-        <Spacer height={Spacing.xl} />
-
-        <View style={styles.hero}>
-          <Image
-            source={require('../assets/images/welcome-hero.png')}
-            style={styles.heroImage}
-            resizeMode="contain"
-          />
-        </View>
-
         <View style={styles.textContainer}>
           <ThemedText style={styles.title}>Quantara</ThemedText>
           <ThemedText style={[styles.tagline, { color: theme.textSecondary }]}>
-            Master your finances through adaptive learning
+            The free, fun, and effective way to build your financial future
           </ThemedText>
         </View>
       </View>
@@ -65,16 +55,12 @@ export default function WelcomeScreen() {
           onPress={handleGetStarted}
         >
           <ThemedText style={[styles.secondaryButtonText, { color: theme.primary }]}>
-            Log In
+            I Already Have an Account
           </ThemedText>
         </Pressable>
       </View>
     </View>
   );
-}
-
-function Spacer({ height }: { height: number }) {
-  return <View style={{ height }} />;
 }
 
 const styles = StyleSheet.create({
@@ -88,36 +74,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
   },
   logoContainer: {
-    width: 100,
-    height: 100,
-    marginBottom: Spacing.lg,
+    width: 160,
+    height: 160,
+    marginBottom: Spacing['2xl'],
   },
   logo: {
     width: '100%',
     height: '100%',
   },
-  hero: {
-    marginBottom: Spacing['2xl'],
-    width: '100%',
-    aspectRatio: 4 / 3,
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
-  },
   textContainer: {
     alignItems: 'center',
-    marginTop: Spacing.lg,
   },
   title: {
     ...Typography.largeTitle,
-    marginBottom: Spacing.sm,
+    fontSize: 40,
+    marginBottom: Spacing.lg,
   },
   tagline: {
     ...Typography.body,
+    fontSize: 18,
     textAlign: 'center',
-    maxWidth: 280,
-    lineHeight: 24,
+    maxWidth: 300,
+    lineHeight: 26,
   },
   buttonContainer: {
     paddingHorizontal: Spacing.xl,
