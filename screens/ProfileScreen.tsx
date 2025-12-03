@@ -105,6 +105,20 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
       <Spacer height={Spacing.lg} />
 
+      <Pressable
+        style={({ pressed }) => [
+          styles.analyticsButton,
+          { backgroundColor: theme.primary, opacity: pressed ? 0.85 : 1 },
+        ]}
+        onPress={() => navigation.navigate('Analytics')}
+      >
+        <Feather name="bar-chart-2" size={20} color="#FFFFFF" />
+        <ThemedText style={styles.analyticsButtonText}>View Analytics</ThemedText>
+        <Feather name="chevron-right" size={20} color="#FFFFFF" />
+      </Pressable>
+
+      <Spacer height={Spacing.lg} />
+
       <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <ThemedText style={styles.cardTitle}>Subscriptions</ThemedText>
 
@@ -221,6 +235,21 @@ const styles = StyleSheet.create({
   },
   savingsText: {
     ...Typography.subhead,
+    flex: 1,
+  },
+  analyticsButton: {
+    marginHorizontal: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.md,
+  },
+  analyticsButtonText: {
+    ...Typography.headline,
+    color: '#FFFFFF',
+    fontWeight: '600',
     flex: 1,
   },
 });
