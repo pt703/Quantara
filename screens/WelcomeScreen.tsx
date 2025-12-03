@@ -143,11 +143,11 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     alignItems: 'center',
-    paddingTop: Spacing.xl,
+    paddingTop: Spacing['3xl'],
   },
   logoContainer: {
-    width: 100,
-    height: 100,
+    width: 130,
+    height: 130,
     marginBottom: Spacing.lg,
   },
   logo: {
@@ -155,9 +155,9 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   title: {
-    fontSize: 44,
-    fontWeight: '800',
-    letterSpacing: -1,
+    fontSize: 38,
+    fontWeight: '600',
+    letterSpacing: -0.5,
     marginBottom: Spacing.sm,
   },
   tagline: {
