@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Image, Pressable } from 'react-native';
+import { View, StyleSheet, Image, Pressable, LinearGradient } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
@@ -18,6 +18,16 @@ export default function WelcomeScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.content}>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../assets/images/app-logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+
+        <Spacer height={Spacing.xl} />
+
         <View style={styles.hero}>
           <Image
             source={require('../assets/images/welcome-hero.png')}
@@ -29,14 +39,17 @@ export default function WelcomeScreen() {
         <View style={styles.textContainer}>
           <ThemedText style={styles.title}>Quantara</ThemedText>
           <ThemedText style={[styles.tagline, { color: theme.textSecondary }]}>
-            Adaptive financial coaching for your real life
+            Master your finances through adaptive learning
           </ThemedText>
         </View>
       </View>
 
       <View style={[styles.buttonContainer, { paddingBottom: insets.bottom + Spacing.xl }]}>
         <Pressable
-          style={[styles.primaryButton, { backgroundColor: theme.primary }]}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            { backgroundColor: theme.primary, opacity: pressed ? 0.85 : 1 },
+          ]}
           onPress={handleGetStarted}
         >
           <ThemedText style={[styles.primaryButtonText, { color: theme.buttonText }]}>
@@ -44,7 +57,13 @@ export default function WelcomeScreen() {
           </ThemedText>
         </Pressable>
 
-        <Pressable style={styles.secondaryButton} onPress={handleGetStarted}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            { borderColor: theme.primary, opacity: pressed ? 0.7 : 1 },
+          ]}
+          onPress={handleGetStarted}
+        >
           <ThemedText style={[styles.secondaryButtonText, { color: theme.primary }]}>
             Log In
           </ThemedText>
@@ -52,6 +71,10 @@ export default function WelcomeScreen() {
       </View>
     </View>
   );
+}
+
+function Spacer({ height }: { height: number }) {
+  return <View style={{ height }} />;
 }
 
 const styles = StyleSheet.create({
@@ -64,15 +87,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,
   },
+  logoContainer: {
+    width: 100,
+    height: 100,
+    marginBottom: Spacing.lg,
+  },
+  logo: {
+    width: '100%',
+    height: '100%',
+  },
   hero: {
-    marginBottom: Spacing['3xl'],
+    marginBottom: Spacing['2xl'],
+    width: '100%',
+    aspectRatio: 4 / 3,
   },
   heroImage: {
-    width: 320,
-    height: 240,
+    width: '100%',
+    height: '100%',
   },
   textContainer: {
     alignItems: 'center',
+    marginTop: Spacing.lg,
   },
   title: {
     ...Typography.largeTitle,
@@ -82,6 +117,7 @@ const styles = StyleSheet.create({
     ...Typography.body,
     textAlign: 'center',
     maxWidth: 280,
+    lineHeight: 24,
   },
   buttonContainer: {
     paddingHorizontal: Spacing.xl,
@@ -95,13 +131,17 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     ...Typography.headline,
+    fontWeight: '600',
   },
   secondaryButton: {
     height: Spacing.buttonHeight,
+    borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: BorderRadius.md,
   },
   secondaryButtonText: {
     ...Typography.headline,
+    fontWeight: '600',
   },
 });
