@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     alignItems: 'center',
-    paddingTop: Spacing['3xl'],
+    paddingTop: 80,
   },
   logoContainer: {
     width: 130,
