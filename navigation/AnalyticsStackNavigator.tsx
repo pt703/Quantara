@@ -11,10 +11,10 @@ export type AnalyticsStackParamList = {
 const Stack = createNativeStackNavigator<AnalyticsStackParamList>();
 
 export default function AnalyticsStackNavigator() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   return (
-    <Stack.Navigator screenOptions={getCommonScreenOptions(theme)}>
+    <Stack.Navigator screenOptions={getCommonScreenOptions({ theme, isDark })}>
       <Stack.Screen
         name="Analytics"
         component={AnalyticsScreen}

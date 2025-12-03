@@ -16,7 +16,7 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <Image
