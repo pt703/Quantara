@@ -1,6 +1,6 @@
 # Overview
 
-Quantara is an adaptive financial literacy learning application built with React Native and Expo. The app helps young adults build financial knowledge and better money habits through bite-sized lessons, interactive quizzes, behavioral challenges, and personalized recommendations. It follows a guest-first approach, allowing users to explore all features locally before optionally signing in for cloud sync.
+Quantara is an adaptive financial literacy learning application built with React Native and Expo. The app helps young adults build financial knowledge and better money habits through bite-sized lessons, interactive quizzes, behavioral challenges, and personalized recommendations. Users must sign in with Supabase authentication (email/password) to access the app. Sessions persist via AsyncStorage for seamless return visits.
 
 The application provides a complete learning experience with modules covering budgeting, saving, debt management, and investments. Users can track their financial snapshot, manage subscriptions, complete challenges, compete on leaderboards, and monitor their learning progress through analytics.
 
@@ -44,6 +44,16 @@ Preferred communication style: Simple, everyday language.
   - `useStorage`: Generic AsyncStorage wrapper with automatic JSON serialization
   - `useTheme`: Theme and color scheme management
   - `useNotifications`: Push notification setup and management
+  - `useAuth`: Supabase authentication with sign up, login, logout, password reset
+
+**Authentication**:
+- Supabase client configured in `lib/supabase.ts` with AsyncStorage for session persistence
+- `AuthContext` provider wraps app with authentication state (`user`, `session`, `isAuthenticated`, `isLoading`)
+- Auth functions: `signUp`, `signIn`, `signOut`, `resetPassword`
+- Auth screens: `LoginScreen`, `SignUpScreen`, `ForgotPasswordScreen`
+- Navigation gating: `RootNavigator` checks `isAuthenticated` to show auth screens or main app
+- Profile screen displays user email and sign out button
+- Environment variables required: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 
 **Animations**:
 - Reanimated v4 for performant animations
@@ -125,6 +135,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Storage & Data
 - **@react-native-async-storage/async-storage**: Persistent key-value storage for user data, progress, and settings
+- **@supabase/supabase-js**: Supabase client for authentication and future backend integration
 
 ## Notifications
 - **expo-notifications**: Local and push notifications system
@@ -146,8 +157,8 @@ Preferred communication style: Simple, everyday language.
 - **babel-plugin-module-resolver**: Path alias resolution (@/* imports)
 
 ## Future Integration Points
-- OAuth providers (Apple, Google) for authentication via expo-web-browser
-- Backend API for cloud sync when users sign in
+- OAuth providers (Apple, Google) for social sign-in via Supabase
+- Backend API tables in Supabase for cloud sync of user data
 - Reinforcement learning service for personalized recommendations
 - Analytics service for user behavior tracking
 - Real banking integrations for financial snapshot automation
