@@ -39,11 +39,11 @@ export default function WelcomeScreen() {
   const { theme } = useTheme();
 
   const handleGetStarted = () => {
-    navigation.navigate('Main' as never);
+    navigation.navigate('SignUp' as never);
   };
 
   const handleLogIn = () => {
-    navigation.navigate('Main' as never);
+    navigation.navigate('Login' as never);
   };
 
   const features: FeatureItemProps[] = [

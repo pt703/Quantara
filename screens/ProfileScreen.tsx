@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Pressable, View, Switch } from "react-native";
+import { StyleSheet, Pressable, View, Switch, Alert } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from "@/components/ThemedText";
@@ -9,6 +9,7 @@ import Spacer from "@/components/Spacer";
 import { Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useUserData } from "@/hooks/useUserData";
+import { useAuthContext } from "@/context/AuthContext";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
 
 type ProfileScreenProps = {
@@ -18,6 +19,14 @@ type ProfileScreenProps = {
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { theme } = useTheme();
   const { profile, financial, setFinancial } = useUserData();
+  const { signOut, user } = useAuthContext();
+
+  const handleSignOut = async () => {
+    const { error } = await signOut();
+    if (error) {
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+    }
+  };
 
   const toggleSubscription = (id: string) => {
     setFinancial({
@@ -163,6 +172,29 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         ) : null}
       </ThemedView>
 
+      <Spacer height={Spacing.lg} />
+
+      {user ? (
+        <View style={styles.accountSection}>
+          <ThemedText style={[styles.emailText, { color: theme.textSecondary }]}>
+            Signed in as {user.email}
+          </ThemedText>
+          <Spacer height={Spacing.md} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.signOutButton,
+              { borderColor: theme.error, opacity: pressed ? 0.7 : 1 },
+            ]}
+            onPress={handleSignOut}
+          >
+            <Feather name="log-out" size={18} color={theme.error} />
+            <ThemedText style={[styles.signOutText, { color: theme.error }]}>
+              Sign Out
+            </ThemedText>
+          </Pressable>
+        </View>
+      ) : null}
+
       <Spacer height={Spacing.xl} />
     </ScreenScrollView>
   );
@@ -251,5 +283,26 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     flex: 1,
+  },
+  accountSection: {
+    marginHorizontal: Spacing.lg,
+    alignItems: 'center',
+  },
+  emailText: {
+    ...Typography.footnote,
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    gap: Spacing.sm,
+  },
+  signOutText: {
+    ...Typography.body,
+    fontWeight: '600',
   },
 });
