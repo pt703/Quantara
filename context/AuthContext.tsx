@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { Platform } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
 
@@ -140,14 +143,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     setIsAuthenticating(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
-        },
-      });
-      
-      return { error };
+      if (Platform.OS === 'web') {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: typeof window !== 'undefined' && window.location ? window.location.origin : undefined,
+          },
+        });
+        return { error };
+      } else {
+        const redirectUrl = Linking.createURL('auth/callback');
+        
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: redirectUrl,
+            skipBrowserRedirect: true,
+          },
+        });
+        
+        if (error) {
+          return { error };
+        }
+        
+        if (data?.url) {
+          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+          
+          if (result.type === 'success' && result.url) {
+            const url = new URL(result.url);
+            const params = new URLSearchParams(url.hash.substring(1));
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+            
+            if (accessToken && refreshToken) {
+              const { error: sessionError } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              return { error: sessionError };
+            }
+          }
+          
+          if (result.type === 'cancel') {
+            return { error: new Error('Sign in was cancelled') };
+          }
+        }
+        
+        return { error: null };
+      }
     } catch (e) {
       console.error('Google sign in exception:', e);
       return { error: e as Error };
