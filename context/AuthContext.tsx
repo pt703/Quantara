@@ -62,9 +62,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     setIsAuthenticating(true);
     try {
+      const redirectUrl = Platform.OS === 'web' 
+        ? (typeof window !== 'undefined' && window.location ? window.location.origin : undefined)
+        : 'https://1fc63d4e-6d35-4ee3-8df8-3a15e59444e6-00-3t0em6mh6h2bl.worf.replit.dev';
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: redirectUrl,
+        },
       });
       
       console.log('Sign up result:', { user: data?.user?.email, error: error?.message });
