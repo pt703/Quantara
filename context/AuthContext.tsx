@@ -2,8 +2,12 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import { makeRedirectUri } from 'expo-auth-session';
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
+
+WebBrowser.maybeCompleteAuthSession();
 
 interface AuthContextType {
   user: User | null;
@@ -152,7 +156,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         return { error };
       } else {
-        const redirectUrl = Linking.createURL('auth/callback');
+        const redirectUrl = makeRedirectUri();
+        console.log('OAuth redirect URL:', redirectUrl);
         
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
@@ -167,32 +172,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         if (data?.url) {
-          try {
-            await WebBrowser.warmUpAsync();
-          } catch {
-          }
-          
-          let result;
-          try {
-            result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-          } finally {
-            try {
-              await WebBrowser.coolDownAsync();
-            } catch {
-            }
-          }
+          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
           
           if (result.type === 'success' && result.url) {
             try {
-              const url = new URL(result.url);
-              const params = new URLSearchParams(url.hash.substring(1));
-              const accessToken = params.get('access_token');
-              const refreshToken = params.get('refresh_token');
+              const { params, errorCode } = QueryParams.getQueryParams(result.url);
               
-              if (accessToken && refreshToken) {
+              if (errorCode) {
+                return { error: new Error(errorCode) };
+              }
+              
+              const { access_token, refresh_token } = params;
+              
+              if (access_token && refresh_token) {
                 const { error: sessionError } = await supabase.auth.setSession({
-                  access_token: accessToken,
-                  refresh_token: refreshToken,
+                  access_token,
+                  refresh_token,
                 });
                 return { error: sessionError };
               }
