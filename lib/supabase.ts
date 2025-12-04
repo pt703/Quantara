@@ -1,13 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey && 
+  !supabaseUrl.includes('${') && !supabaseAnonKey.includes('${'));
 
 function createSupabaseClient(): SupabaseClient {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('Supabase credentials not configured. Auth features will be disabled.');
+  if (!isSupabaseConfigured) {
+    console.warn('Supabase credentials not configured. Using placeholder client.');
     return createClient('https://placeholder.supabase.co', 'placeholder-key', {
       auth: {
         storage: AsyncStorage,
@@ -18,12 +21,14 @@ function createSupabaseClient(): SupabaseClient {
     });
   }
 
+  console.log('Supabase configured with URL:', supabaseUrl);
+
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       storage: AsyncStorage,
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false,
+      detectSessionInUrl: Platform.OS === 'web',
     },
   });
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TextInput, Pressable, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, TextInput, Pressable, ActivityIndicator, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -13,7 +13,7 @@ export default function SignUpScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { signUp, isLoading } = useAuthContext();
+  const { signUp, signInWithGoogle, isAuthenticating } = useAuthContext();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,6 +21,9 @@ export default function SignUpScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const isLoading = isSubmitting || isAuthenticating;
 
   const handleSignUp = async () => {
     if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
@@ -39,12 +42,41 @@ export default function SignUpScreen() {
     }
 
     setError('');
-    const { error: authError } = await signUp(email.trim(), password);
+    setIsSubmitting(true);
     
-    if (authError) {
-      setError(authError.message);
-    } else {
-      setSuccess(true);
+    try {
+      const { error: authError } = await signUp(email.trim(), password);
+      
+      if (authError) {
+        setError(authError.message);
+      } else {
+        setSuccess(true);
+      }
+    } catch (e) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    setError('');
+    setIsSubmitting(true);
+    
+    try {
+      const { error: authError } = await signInWithGoogle();
+      
+      if (authError) {
+        if (authError.message.includes('provider is not enabled')) {
+          setError('Google signup is not enabled. Please contact support.');
+        } else {
+          setError(authError.message);
+        }
+      }
+    } catch (e) {
+      setError('Something went wrong with Google signup.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -170,6 +202,30 @@ export default function SignUpScreen() {
               Create Account
             </ThemedText>
           )}
+        </Pressable>
+
+        <View style={styles.dividerContainer}>
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <ThemedText style={[styles.dividerText, { color: theme.textSecondary }]}>or</ThemedText>
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+        </View>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.socialButton,
+            { borderColor: theme.border, opacity: pressed || isLoading ? 0.85 : 1 },
+          ]}
+          onPress={handleGoogleSignUp}
+          disabled={isLoading}
+        >
+          <View style={styles.socialButtonContent}>
+            <View style={styles.googleIcon}>
+              <ThemedText style={styles.googleIconText}>G</ThemedText>
+            </View>
+            <ThemedText style={[styles.socialButtonText, { color: theme.text }]}>
+              Continue with Google
+            </ThemedText>
+          </View>
         </Pressable>
 
         <View style={styles.loginRow}>
@@ -313,5 +369,46 @@ const styles = StyleSheet.create({
   loginButtonText: {
     fontSize: 17,
     fontWeight: '600',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontSize: 14,
+  },
+  socialButton: {
+    height: 52,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  socialButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  googleIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#4285F4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleIconText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  socialButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
