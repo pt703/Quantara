@@ -167,24 +167,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         if (data?.url) {
-          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+          try {
+            await WebBrowser.warmUpAsync();
+          } catch {
+          }
           
-          if (result.type === 'success' && result.url) {
-            const url = new URL(result.url);
-            const params = new URLSearchParams(url.hash.substring(1));
-            const accessToken = params.get('access_token');
-            const refreshToken = params.get('refresh_token');
-            
-            if (accessToken && refreshToken) {
-              const { error: sessionError } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-              });
-              return { error: sessionError };
+          let result;
+          try {
+            result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+          } finally {
+            try {
+              await WebBrowser.coolDownAsync();
+            } catch {
             }
           }
           
-          if (result.type === 'cancel') {
+          if (result.type === 'success' && result.url) {
+            try {
+              const url = new URL(result.url);
+              const params = new URLSearchParams(url.hash.substring(1));
+              const accessToken = params.get('access_token');
+              const refreshToken = params.get('refresh_token');
+              
+              if (accessToken && refreshToken) {
+                const { error: sessionError } = await supabase.auth.setSession({
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                });
+                return { error: sessionError };
+              }
+            } catch (parseError) {
+              console.error('Error parsing OAuth response:', parseError);
+              return { error: new Error('Failed to process sign in response') };
+            }
+          }
+          
+          if (result.type === 'cancel' || result.type === 'dismiss') {
             return { error: new Error('Sign in was cancelled') };
           }
         }
