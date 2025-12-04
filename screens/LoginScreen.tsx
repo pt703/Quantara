@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TextInput, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, StyleSheet, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthContext } from '@/context/AuthContext';
-import { Spacing, Typography, BorderRadius } from '@/constants/theme';
-import { ScreenKeyboardAwareScrollView } from '@/components/ScreenKeyboardAwareScrollView';
+import { Spacing, BorderRadius } from '@/constants/theme';
+import { SimpleKeyboardScrollView } from '@/components/SimpleKeyboardScrollView';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -43,7 +43,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <ScreenKeyboardAwareScrollView
+    <SimpleKeyboardScrollView
       contentContainerStyle={styles.container}
     >
       <View style={styles.header}>
@@ -139,7 +139,7 @@ export default function LoginScreen() {
           </Pressable>
         </View>
       </View>
-    </ScreenKeyboardAwareScrollView>
+    </SimpleKeyboardScrollView>
   );
 }
 

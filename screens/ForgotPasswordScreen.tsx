@@ -7,7 +7,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthContext } from '@/context/AuthContext';
 import { Spacing, BorderRadius } from '@/constants/theme';
-import { ScreenKeyboardAwareScrollView } from '@/components/ScreenKeyboardAwareScrollView';
+import { SimpleKeyboardScrollView } from '@/components/SimpleKeyboardScrollView';
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation();
@@ -58,7 +58,7 @@ export default function ForgotPasswordScreen() {
   }
 
   return (
-    <ScreenKeyboardAwareScrollView
+    <SimpleKeyboardScrollView
       contentContainerStyle={styles.container}
     >
       <View style={styles.header}>
@@ -120,7 +120,7 @@ export default function ForgotPasswordScreen() {
           )}
         </Pressable>
       </View>
-    </ScreenKeyboardAwareScrollView>
+    </SimpleKeyboardScrollView>
   );
 }
 

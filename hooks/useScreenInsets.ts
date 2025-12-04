@@ -15,3 +15,13 @@ export function useScreenInsets() {
     scrollInsetBottom: insets.bottom + 16,
   };
 }
+
+export function useSimpleInsets() {
+  const insets = useSafeAreaInsets();
+
+  return {
+    paddingTop: insets.top + Spacing.xl,
+    paddingBottom: insets.bottom + Spacing.xl,
+    scrollInsetBottom: insets.bottom + 16,
+  };
+}
