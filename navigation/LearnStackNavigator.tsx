@@ -14,6 +14,7 @@ import ModuleDetailScreen from "@/screens/ModuleDetailScreen";
 import LessonScreen from "@/screens/LessonScreen";
 import LessonPlayerScreen from "@/screens/LessonPlayerScreen";
 import PreAssessmentScreen from "@/screens/PreAssessmentScreen";
+import CourseDetailScreen from "@/screens/CourseDetailScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { getCommonScreenOptions } from "@/navigation/screenOptions";
 
@@ -73,6 +74,16 @@ export default function LearnStackNavigator() {
           headerShown: false,
           presentation: 'card',
           gestureEnabled: false, // Don't allow back during assessment
+        }}
+      />
+      {/* Course detail showing lessons with modules */}
+      <Stack.Screen
+        name="CourseDetail"
+        component={CourseDetailScreen}
+        options={{ 
+          headerShown: false,
+          presentation: 'card',
+          gestureEnabled: true,
         }}
       />
     </Stack.Navigator>

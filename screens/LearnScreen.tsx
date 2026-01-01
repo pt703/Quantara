@@ -272,16 +272,8 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
                 return;
               }
               
-              // Navigate to first incomplete lesson
-              const firstIncomplete = course.lessons.find(
-                l => !course.progress.completed || course.progress.percentage < 100
-              );
-              if (firstIncomplete) {
-                navigation.navigate('LessonPlayer', { 
-                  lessonId: firstIncomplete.id, 
-                  courseId: course.id 
-                });
-              }
+              // Navigate to course detail showing lesson/module structure
+              navigation.navigate('CourseDetail', { courseId: course.id });
             }}
           >
             {/* Course icon */}
