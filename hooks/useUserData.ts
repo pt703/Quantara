@@ -6,18 +6,16 @@ const DEFAULT_PROFILE: UserProfile = {
   avatar: 0,
 };
 
+// Default financial data - user can edit all of this in Profile
 const DEFAULT_FINANCIAL: FinancialSnapshot = {
-  monthlyIncome: 2500,
-  monthlyExpenses: 1800,
-  totalDebt: 15000,
-  savingsGoal: 5000,
-  currentSavings: 1200,
-  subscriptions: [
-    { id: 'sub-1', name: 'Netflix', cost: 12.99, active: true },
-    { id: 'sub-2', name: 'Spotify', cost: 9.99, active: true },
-    { id: 'sub-3', name: 'Gym Membership', cost: 45, active: true },
-    { id: 'sub-4', name: 'Adobe Creative Cloud', cost: 54.99, active: false },
-  ],
+  monthlyIncome: 0,          // Start empty - user fills in
+  monthlyExpenses: 0,        // Start empty - user fills in
+  totalDebt: 0,              // Calculated from debtItems
+  savingsGoal: 0,            // User sets their target
+  currentSavings: 0,         // User tracks this
+  subscriptions: [],         // User adds their own
+  debtItems: [],             // User adds their debts
+  portfolioAssets: [],       // User adds their assets
 };
 
 export function useUserData() {

@@ -58,59 +58,68 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
       <Spacer height={Spacing.xl} />
 
-      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={styles.cardHeader}>
-          <ThemedText style={styles.cardTitle}>Financial Overview</ThemedText>
-          <Pressable onPress={() => navigation.navigate('Settings')}>
-            <Feather name="settings" size={20} color={theme.textSecondary} />
-          </Pressable>
-        </View>
+      <Pressable
+        onPress={() => navigation.navigate('FinancialEdit')}
+        style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+      >
+        <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.cardHeader}>
+            <ThemedText style={styles.cardTitle}>Financial Overview</ThemedText>
+            <Feather name="edit-2" size={18} color={theme.primary} />
+          </View>
 
-        <Spacer height={Spacing.lg} />
+          <Spacer height={Spacing.lg} />
 
-        <View style={styles.financialRow}>
-          <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
-            Monthly Income
-          </ThemedText>
-          <ThemedText style={styles.financialValue}>
-            £{financial.monthlyIncome.toLocaleString()}
-          </ThemedText>
-        </View>
+          <View style={styles.financialRow}>
+            <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
+              Monthly Income
+            </ThemedText>
+            <ThemedText style={styles.financialValue}>
+              £{financial.monthlyIncome.toLocaleString()}
+            </ThemedText>
+          </View>
 
-        <Spacer height={Spacing.md} />
+          <Spacer height={Spacing.md} />
 
-        <View style={styles.financialRow}>
-          <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
-            Monthly Expenses
-          </ThemedText>
-          <ThemedText style={styles.financialValue}>
-            £{financial.monthlyExpenses.toLocaleString()}
-          </ThemedText>
-        </View>
+          <View style={styles.financialRow}>
+            <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
+              Monthly Expenses
+            </ThemedText>
+            <ThemedText style={styles.financialValue}>
+              £{financial.monthlyExpenses.toLocaleString()}
+            </ThemedText>
+          </View>
 
-        <Spacer height={Spacing.md} />
+          <Spacer height={Spacing.md} />
 
-        <View style={styles.financialRow}>
-          <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
-            Total Debt
-          </ThemedText>
-          <ThemedText style={styles.financialValue}>
-            £{financial.totalDebt.toLocaleString()}
-          </ThemedText>
-        </View>
+          <View style={styles.financialRow}>
+            <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
+              Total Debt
+            </ThemedText>
+            <ThemedText style={[styles.financialValue, financial.totalDebt > 0 && { color: theme.error }]}>
+              £{financial.totalDebt.toLocaleString()}
+            </ThemedText>
+          </View>
 
-        <Spacer height={Spacing.md} />
+          <Spacer height={Spacing.md} />
 
-        <View style={styles.financialRow}>
-          <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
-            Savings Goal
+          <View style={styles.financialRow}>
+            <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
+              Savings Progress
+            </ThemedText>
+            <ThemedText style={styles.financialValue}>
+              £{financial.currentSavings.toLocaleString()} / £
+              {financial.savingsGoal.toLocaleString()}
+            </ThemedText>
+          </View>
+
+          <Spacer height={Spacing.md} />
+
+          <ThemedText style={[styles.tapToEdit, { color: theme.textSecondary }]}>
+            Tap to edit your finances
           </ThemedText>
-          <ThemedText style={styles.financialValue}>
-            £{financial.currentSavings.toLocaleString()} / £
-            {financial.savingsGoal.toLocaleString()}
-          </ThemedText>
-        </View>
-      </ThemedView>
+        </ThemedView>
+      </Pressable>
 
       <Spacer height={Spacing.lg} />
 
@@ -128,49 +137,46 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
       <Spacer height={Spacing.lg} />
 
-      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <ThemedText style={styles.cardTitle}>Subscriptions</ThemedText>
+      <Pressable
+        onPress={() => navigation.navigate('SubscriptionManager')}
+        style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+      >
+        <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.cardHeader}>
+            <ThemedText style={styles.cardTitle}>Subscriptions</ThemedText>
+            <View style={styles.subscriptionBadge}>
+              <ThemedText style={[styles.subscriptionCount, { color: theme.textSecondary }]}>
+                {financial.subscriptions.length}
+              </ThemedText>
+              <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+            </View>
+          </View>
 
-        <Spacer height={Spacing.lg} />
+          <Spacer height={Spacing.md} />
 
-        {financial.subscriptions.map((sub) => (
-          <React.Fragment key={sub.id}>
-            <View style={styles.subscriptionRow}>
-              <View style={styles.subscriptionInfo}>
-                <ThemedText style={styles.subscriptionName}>{sub.name}</ThemedText>
-                <ThemedText style={[styles.subscriptionCost, { color: theme.textSecondary }]}>
-                  £{sub.cost.toFixed(2)}/month
+          <View style={styles.financialRow}>
+            <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
+              Active Cost
+            </ThemedText>
+            <ThemedText style={[styles.financialValue, { color: theme.error }]}>
+              £{financial.subscriptions.filter(s => s.active).reduce((sum, s) => sum + s.cost, 0).toFixed(2)}/mo
+            </ThemedText>
+          </View>
+
+          {savings > 0 ? (
+            <>
+              <Spacer height={Spacing.md} />
+              <View style={[styles.savingsCalculator, { backgroundColor: theme.success + '20' }]}>
+                <Feather name="trending-down" size={16} color={theme.success} />
+                <Spacer width={Spacing.sm} />
+                <ThemedText style={[styles.savingsText, { color: theme.success }]}>
+                  Saving £{savings.toFixed(2)}/month by cancelling {cancelledSubscriptions.length}
                 </ThemedText>
               </View>
-
-              <Switch
-                value={sub.active}
-                onValueChange={() => toggleSubscription(sub.id)}
-                trackColor={{ false: theme.border, true: theme.primary }}
-                thumbColor={theme.card}
-              />
-            </View>
-
-            <Spacer height={Spacing.md} />
-          </React.Fragment>
-        ))}
-
-        {savings > 0 ? (
-          <>
-            <Spacer height={Spacing.md} />
-
-            <View style={[styles.savingsCalculator, { backgroundColor: theme.success + '20' }]}>
-              <Feather name="info" size={20} color={theme.success} />
-              <Spacer width={Spacing.md} />
-              <ThemedText style={[styles.savingsText, { color: theme.success }]}>
-                By cancelling {cancelledSubscriptions.length} subscription
-                {cancelledSubscriptions.length !== 1 ? 's' : ''}, you save £
-                {savings.toFixed(2)}/month
-              </ThemedText>
-            </View>
-          </>
-        ) : null}
-      </ThemedView>
+            </>
+          ) : null}
+        </ThemedView>
+      </Pressable>
 
       <Spacer height={Spacing.lg} />
 
@@ -302,6 +308,19 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   signOutText: {
+    ...Typography.body,
+    fontWeight: '600',
+  },
+  tapToEdit: {
+    ...Typography.caption,
+    textAlign: 'center',
+  },
+  subscriptionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  subscriptionCount: {
     ...Typography.body,
     fontWeight: '600',
   },

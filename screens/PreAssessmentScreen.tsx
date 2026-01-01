@@ -307,7 +307,7 @@ export default function PreAssessmentScreen({ navigation, route }: PreAssessment
   
   const course = useMemo(() => getCourseById(courseId), [courseId]);
   
-  const { skills, updateSkill, markCourseAssessed } = useAdaptiveLearning(0);
+  const { markCourseAssessed, storeBaselineAssessment } = useAdaptiveLearning(0);
   const { gainXP } = useGamification();
 
   // ==========================================================================
@@ -370,22 +370,41 @@ export default function PreAssessmentScreen({ navigation, route }: PreAssessment
     }, 1500);
   }, [currentQuestion, currentQuestionIndex, totalQuestions]);
 
+  // Complete assessment - stores baseline for bandit but does NOT update displayed skills
+  // Displayed skills only update from actual lesson completion
   const handleComplete = useCallback(() => {
-    skillResults.forEach(result => {
-      updateSkill(result.domain, result.percentage);
-    });
+    // Store baseline assessment results for the contextual bandit
+    // This influences recommendations but doesn't show as progress
+    storeBaselineAssessment(courseId, skillResults);
 
     markCourseAssessed(courseId);
-
     gainXP(xpEarned);
 
-    navigation.replace('Learn');
-  }, [skillResults, updateSkill, markCourseAssessed, courseId, gainXP, xpEarned, navigation]);
+    // Navigate to first lesson in the course
+    if (course && course.lessons.length > 0) {
+      navigation.replace('LessonPlayer', {
+        courseId: courseId,
+        lessonId: course.lessons[0].id,
+      });
+    } else {
+      navigation.replace('Learn');
+    }
+  }, [skillResults, storeBaselineAssessment, markCourseAssessed, courseId, course, gainXP, xpEarned, navigation]);
 
+  // Skip assessment - go directly to first lesson
   const handleSkip = useCallback(() => {
     markCourseAssessed(courseId);
-    navigation.replace('Learn');
-  }, [markCourseAssessed, courseId, navigation]);
+    
+    // Navigate directly to first lesson
+    if (course && course.lessons.length > 0) {
+      navigation.replace('LessonPlayer', {
+        courseId: courseId,
+        lessonId: course.lessons[0].id,
+      });
+    } else {
+      navigation.replace('Learn');
+    }
+  }, [markCourseAssessed, courseId, course, navigation]);
 
   // ==========================================================================
   // RENDER INTRO SCREEN

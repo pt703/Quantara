@@ -33,8 +33,10 @@ import {
 const GAMIFICATION_STORAGE_KEY = 'quantara_gamification_state';
 
 // Default state for new users
+// NOTE: Users start with 0 hearts and earn them through lesson completion
+// This makes hearts feel earned rather than given, encouraging engagement
 const DEFAULT_GAMIFICATION_STATE: GamificationState = {
-  hearts: MAX_HEARTS,          // Start with full hearts
+  hearts: 0,                   // Start with no hearts - earn them!
   maxHearts: MAX_HEARTS,
   xp: 0,                       // No XP yet
   level: 1,                    // Start at level 1
@@ -328,6 +330,27 @@ export function useGamification() {
   }, [state, setStoredState]);
 
   /**
+   * Awards a heart for completing a lesson successfully.
+   * Users earn hearts by learning, not by default.
+   * Returns true if a heart was awarded (not at max).
+   */
+  const earnHeart = useCallback((): boolean => {
+    if (state.hearts >= MAX_HEARTS) {
+      return false; // Already at max
+    }
+
+    const newHearts = state.hearts + 1;
+    const newState: GamificationState = {
+      ...state,
+      hearts: newHearts,
+    };
+
+    setState(newState);
+    setStoredState(newState);
+    return true;
+  }, [state, setStoredState]);
+
+  /**
    * Refills hearts to max (e.g., from purchasing or daily reset).
    */
   const refillHearts = useCallback((): void => {
@@ -552,6 +575,7 @@ export function useGamification() {
     // Heart actions
     loseHeart,
     addHearts,
+    earnHeart,
     refillHearts,
 
     // XP actions

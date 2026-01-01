@@ -28,6 +28,7 @@ import {
   Course,
   LessonAttemptLog,
   SkillDomain,
+  BaselineAssessment,
 } from '../types';
 import { 
   ContextualBandit,
@@ -48,6 +49,7 @@ const BANDIT_STORAGE_KEY = 'quantara_bandit_state';
 const COMPLETED_LESSONS_KEY = 'quantara_completed_lessons';
 const LESSON_ATTEMPTS_KEY = 'quantara_lesson_attempts';
 const ASSESSED_COURSES_KEY = 'quantara_assessed_courses';
+const BASELINE_ASSESSMENTS_KEY = 'quantara_baseline_assessments';
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -145,6 +147,13 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
   // Courses that have been assessed (user took pre-assessment)
   const [assessedCourses, setAssessedCourses] = useStorage<string[]>(
     ASSESSED_COURSES_KEY,
+    []
+  );
+
+  // Baseline assessments - stores pre-assessment results separately from displayed skills
+  // These are used by the contextual bandit for recommendations but don't show as progress
+  const [baselineAssessments, setBaselineAssessments] = useStorage<BaselineAssessment[]>(
+    BASELINE_ASSESSMENTS_KEY,
     []
   );
 
@@ -416,6 +425,48 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
     return assessedCourses.includes(courseId);
   }, [assessedCourses]);
 
+  /**
+   * Stores baseline assessment results for the contextual bandit.
+   * These results influence recommendations but do NOT update displayed skill levels.
+   * Displayed skills only increase through actual lesson completion.
+   * 
+   * @param courseId - The course the assessment was for
+   * @param skillResults - Array of {domain, correct, total, percentage} results
+   */
+  const storeBaselineAssessment = useCallback((
+    courseId: string,
+    skillResults: Array<{ domain: SkillDomain; correct: number; total: number; percentage: number }>
+  ): void => {
+    // Build skill profile from results
+    const skillProfile: SkillProfile = {
+      budgeting: skillResults.find(r => r.domain === 'budgeting')?.percentage || 0,
+      saving: skillResults.find(r => r.domain === 'saving')?.percentage || 0,
+      debt: skillResults.find(r => r.domain === 'debt')?.percentage || 0,
+      investing: skillResults.find(r => r.domain === 'investing')?.percentage || 0,
+      credit: skillResults.find(r => r.domain === 'credit')?.percentage || 0,
+      lastUpdated: new Date().toISOString(),
+    };
+
+    const newBaseline: BaselineAssessment = {
+      skills: skillProfile,
+      completedAt: new Date().toISOString(),
+      courseId,
+    };
+
+    // Add or update baseline for this course
+    setBaselineAssessments(prev => {
+      const filtered = prev.filter(b => b.courseId !== courseId);
+      return [...filtered, newBaseline];
+    });
+  }, [setBaselineAssessments]);
+
+  /**
+   * Gets baseline assessment for a course (if exists).
+   */
+  const getBaselineAssessment = useCallback((courseId: string): BaselineAssessment | null => {
+    return baselineAssessments.find(b => b.courseId === courseId) || null;
+  }, [baselineAssessments]);
+
   // ==========================================================================
   // PROGRESS TRACKING
   // ==========================================================================
@@ -564,6 +615,11 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
     assessedCourses,
     markCourseAssessed,
     isCourseAssessed,
+
+    // Baseline assessments (for contextual bandit, not displayed skills)
+    baselineAssessments,
+    storeBaselineAssessment,
+    getBaselineAssessment,
 
     // Recommendations
     recommendations,

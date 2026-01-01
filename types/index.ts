@@ -279,13 +279,23 @@ export interface SkillProfile {
 }
 
 // Default starting skills for new users
+// NOTE: Skills start at 0% and increase ONLY through lesson completion
+// Pre-assessment results are stored separately and used for recommendations
 export const DEFAULT_SKILLS: SkillProfile = {
-  budgeting: 50,
-  saving: 50,
-  debt: 50,
-  investing: 50,
-  credit: 50,
+  budgeting: 0,
+  saving: 0,
+  debt: 0,
+  investing: 0,
+  credit: 0,
   lastUpdated: new Date().toISOString(),
+};
+
+// Baseline skills from pre-assessment (stored separately from displayed skills)
+// Used by contextual bandit for initial recommendations
+export interface BaselineAssessment {
+  skills: SkillProfile;
+  completedAt: string;
+  courseId: string;
 };
 
 // Context vector for the contextual bandit algorithm
@@ -426,6 +436,26 @@ export interface Subscription {
   active: boolean;
 }
 
+// Individual debt item for tracking multiple debts
+export interface DebtItem {
+  id: string;
+  name: string;                // e.g., "Student Loan", "Credit Card"
+  balance: number;             // Current balance
+  interestRate: number;        // APR as percentage
+  minimumPayment: number;      // Monthly minimum
+  dueDate?: number;            // Day of month
+}
+
+// Portfolio asset for tracking investments
+export interface PortfolioAsset {
+  id: string;
+  name: string;                // e.g., "Apple Stock", "Bitcoin"
+  type: 'stock' | 'crypto' | 'bond' | 'etf' | 'cash' | 'property' | 'other';
+  quantity: number;            // How many units owned
+  purchasePrice: number;       // Price per unit when bought
+  currentValue: number;        // Current estimated value per unit
+}
+
 export interface FinancialSnapshot {
   monthlyIncome: number;
   monthlyExpenses: number;
@@ -433,6 +463,8 @@ export interface FinancialSnapshot {
   savingsGoal: number;
   currentSavings: number;
   subscriptions: Subscription[];
+  debtItems: DebtItem[];       // Detailed breakdown of debts
+  portfolioAssets: PortfolioAsset[]; // Investment portfolio
 }
 
 export interface UserProfile {
