@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { View, StyleSheet, Pressable, ScrollView } from "react-native";
+import { View, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from "@/components/ThemedText";
@@ -11,8 +11,8 @@ import { Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useUserData } from "@/hooks/useUserData";
 import { useLearningProgress } from "@/hooks/useLearningProgress";
+import { useAdaptiveRecommendations, AdaptiveRecommendation } from "@/hooks/useAdaptiveRecommendations";
 import { modules } from "../mock/modules";
-import { recommendations } from "../mock/recommendations";
 
 type RootTabParamList = {
   HomeTab: undefined;
@@ -27,6 +27,7 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const { profile, financial } = useUserData();
   const { getLessonStatus } = useLearningProgress();
+  const { generateRecommendations, isLoading: recommendationsLoading, getAllPerformanceStats } = useAdaptiveRecommendations();
 
   const continueLesson = useMemo(() => {
     for (const module of modules) {
@@ -48,26 +49,22 @@ export default function HomeScreen() {
     return null;
   }, [getLessonStatus]);
 
+  const adaptiveRecommendations = useMemo(() => {
+    if (recommendationsLoading) return [];
+    return generateRecommendations(5);
+  }, [generateRecommendations, recommendationsLoading]);
+
+  const performanceStats = useMemo(() => getAllPerformanceStats(), [getAllPerformanceStats]);
+
   const savingsProgress = (financial.currentSavings / financial.savingsGoal) * 100;
   const activeSubscriptions = financial.subscriptions.filter(s => s.active).length;
 
-  const handleRecommendationPress = (rec: typeof recommendations[0]) => {
-    if (rec.kind === 'lesson') {
-      const module = modules.find(m => m.lessons.some(l => l.id === rec.linkedId));
-      if (module) {
-        // @ts-ignore - nested navigation typing is complex
-        navigation.navigate('LearnTab', {
-          screen: 'Lesson',
-          params: { lessonId: rec.linkedId, moduleId: module.id },
-        });
-      }
-    } else if (rec.kind === 'challenge') {
-      // @ts-ignore - nested navigation typing is complex
-      navigation.navigate('ChallengesTab', {
-        screen: 'ChallengeDetail',
-        params: { challengeId: rec.linkedId },
-      });
-    }
+  const handleRecommendationPress = (rec: AdaptiveRecommendation) => {
+    // @ts-ignore - nested navigation typing is complex
+    navigation.navigate('LearnTab', {
+      screen: 'Lesson',
+      params: { lessonId: rec.lessonId, moduleId: rec.moduleId },
+    });
   };
 
   return (
@@ -169,74 +166,99 @@ export default function HomeScreen() {
       <ThemedText style={styles.sectionTitle}>Recommended for you</ThemedText>
       <Spacer height={Spacing.md} />
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.recommendationsContainer}
-      >
-        {recommendations.map((rec, index) => (
-          <Pressable
-            key={rec.id}
-            style={[
-              styles.recommendationCard,
-              { backgroundColor: theme.card, borderColor: theme.border },
-              index !== 0 && styles.recommendationCardSpacing,
-            ]}
-            onPress={() => handleRecommendationPress(rec)}
-          >
-            <View
+      {recommendationsLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={theme.primary} />
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.recommendationsContainer}
+        >
+          {adaptiveRecommendations.map((rec, index) => (
+            <Pressable
+              key={rec.id}
               style={[
-                styles.tag,
-                {
-                  backgroundColor:
-                    rec.kind === 'lesson'
-                      ? theme.primary + '20'
-                      : rec.kind === 'challenge'
-                      ? theme.success + '20'
-                      : theme.warning + '20',
-                },
+                styles.recommendationCard,
+                { backgroundColor: theme.card, borderColor: theme.border },
+                index !== 0 && styles.recommendationCardSpacing,
               ]}
+              onPress={() => handleRecommendationPress(rec)}
             >
+              <View style={styles.tagRow}>
+                <View
+                  style={[
+                    styles.tag,
+                    {
+                      backgroundColor:
+                        rec.type === 'lesson'
+                          ? theme.primary + '20'
+                          : rec.type === 'quiz'
+                          ? theme.success + '20'
+                          : rec.type === 'review'
+                          ? theme.warning + '20'
+                          : theme.primary + '20',
+                    },
+                  ]}
+                >
+                  <ThemedText
+                    style={[
+                      styles.tagText,
+                      {
+                        color:
+                          rec.type === 'lesson'
+                            ? theme.primary
+                            : rec.type === 'quiz'
+                            ? theme.success
+                            : rec.type === 'review'
+                            ? theme.warning
+                            : theme.primary,
+                      },
+                    ]}
+                  >
+                    {rec.type.charAt(0).toUpperCase() + rec.type.slice(1)}
+                  </ThemedText>
+                </View>
+
+                {rec.isExploration ? (
+                  <View style={[styles.explorationBadge, { backgroundColor: theme.warning + '20' }]}>
+                    <Feather name="compass" size={12} color={theme.warning} />
+                  </View>
+                ) : null}
+              </View>
+
+              <Spacer height={Spacing.md} />
+
+              <ThemedText style={styles.recommendationTitle} numberOfLines={2}>
+                {rec.title}
+              </ThemedText>
+
               <ThemedText
-                style={[
-                  styles.tagText,
-                  {
-                    color:
-                      rec.kind === 'lesson'
-                        ? theme.primary
-                        : rec.kind === 'challenge'
-                        ? theme.success
-                        : theme.warning,
-                  },
-                ]}
+                style={[styles.recommendationDescription, { color: theme.textSecondary }]}
+                numberOfLines={2}
               >
-                {rec.kind.charAt(0).toUpperCase() + rec.kind.slice(1)}
+                {rec.reason}
               </ThemedText>
-            </View>
 
-            <Spacer height={Spacing.md} />
+              <View style={styles.metaRow}>
+                <Feather name="clock" size={14} color={theme.textSecondary} />
+                <ThemedText style={[styles.metaText, { color: theme.textSecondary }]}>
+                  {rec.estimatedMinutes} min
+                </ThemedText>
+              </View>
 
-            <ThemedText style={styles.recommendationTitle} numberOfLines={2}>
-              {rec.title}
-            </ThemedText>
+              <Spacer height={Spacing.md} />
 
-            <ThemedText
-              style={[styles.recommendationDescription, { color: theme.textSecondary }]}
-              numberOfLines={3}
-            >
-              {rec.shortDescription}
-            </ThemedText>
-
-            <Spacer height={Spacing.md} />
-
-            <View style={[styles.startButton, { borderColor: theme.primary }]}>
-              <ThemedText style={[styles.startButtonText, { color: theme.primary }]}>
-                Start
-              </ThemedText>
-            </View>
-          </Pressable>
-        ))}
-      </ScrollView>
+              <View style={[styles.startButton, { borderColor: theme.primary }]}>
+                <ThemedText style={[styles.startButtonText, { color: theme.primary }]}>
+                  Start
+                </ThemedText>
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
 
       <Spacer height={Spacing['2xl']} />
     </ScreenScrollView>
@@ -339,5 +361,27 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     ...Typography.headline,
+  },
+  loadingContainer: {
+    paddingVertical: Spacing.xl,
+    alignItems: 'center',
+  },
+  tagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  explorationBadge: {
+    padding: Spacing.xs,
+    borderRadius: BorderRadius.xs,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+  },
+  metaText: {
+    ...Typography.caption,
   },
 });

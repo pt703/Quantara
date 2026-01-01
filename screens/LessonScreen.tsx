@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
@@ -9,21 +9,35 @@ import Spacer from '@/components/Spacer';
 import { Spacing, Typography, BorderRadius } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useLearningProgress } from '@/hooks/useLearningProgress';
+import { useContextualBandit } from '@/hooks/useContextualBandit';
 import { modules } from '../mock/modules';
 import { LearnStackParamList } from '../navigation/LearnStackNavigator';
+import { SkillDomain } from '../types';
+
+const DOMAIN_MAPPING: Record<string, SkillDomain> = {
+  'module-1': 'budgeting',
+  'module-2': 'debt',
+  'module-3': 'investing',
+  'module-4': 'saving',
+  'module-5': 'credit',
+};
 
 export default function LessonScreen() {
   const route = useRoute<RouteProp<LearnStackParamList, 'Lesson'>>();
   const navigation = useNavigation();
   const { theme } = useTheme();
   const { getLessonStatus, setLessonStatus } = useLearningProgress();
+  const { recordOutcome } = useContextualBandit();
   const { lessonId, moduleId } = route.params;
+  const startTime = useRef(Date.now());
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [quizComplete, setQuizComplete] = useState(false);
   const [score, setScore] = useState(0);
+
+  const domain = DOMAIN_MAPPING[moduleId] || 'budgeting';
 
   const lesson = useMemo(() => {
     const module = modules.find((m) => m.id === moduleId);
@@ -43,6 +57,8 @@ export default function LessonScreen() {
 
   const handleMarkComplete = async () => {
     await setLessonStatus(lessonId, 'completed');
+    const timeSpent = Math.round((Date.now() - startTime.current) / 1000);
+    await recordOutcome(domain, 1.0, true, timeSpent);
     navigation.goBack();
   };
 
@@ -74,6 +90,10 @@ export default function LessonScreen() {
     } else {
       setQuizComplete(true);
       await setLessonStatus(lessonId, 'completed');
+      const finalScore = (score + (selectedAnswer === lesson.quiz.questions[currentQuestionIndex].correctAnswer ? 1 : 0)) / lesson.quiz.questions.length;
+      const passed = finalScore >= 0.7;
+      const timeSpent = Math.round((Date.now() - startTime.current) / 1000);
+      await recordOutcome(domain, finalScore, passed, timeSpent);
     }
   };
 
