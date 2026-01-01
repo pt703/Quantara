@@ -30,6 +30,7 @@ import Animated, {
   ZoomIn,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import Spacer from '@/components/Spacer';
@@ -170,6 +171,7 @@ export default function ReadingModuleScreen({ navigation, route }: ReadingModule
   const { moduleId, lessonId, courseId, moduleIndex, totalModules, allModules } = route.params;
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   
   const { completeReadingModule, getModuleProgress } = useModuleProgress();
   const { gainXP } = useGamification();
@@ -293,7 +295,7 @@ export default function ReadingModuleScreen({ navigation, route }: ReadingModule
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 100 }
+          { paddingBottom: tabBarHeight + 80 }
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -334,7 +336,7 @@ export default function ReadingModuleScreen({ navigation, route }: ReadingModule
         styles.bottomBar,
         { 
           backgroundColor: theme.background,
-          paddingBottom: insets.bottom + Spacing.md,
+          bottom: tabBarHeight,
           borderTopColor: theme.border,
         }
       ]}>
