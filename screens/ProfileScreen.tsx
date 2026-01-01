@@ -55,12 +55,14 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   };
 
   // Calculate subscription savings from cancelled subscriptions
-  const cancelledSubscriptions = financial.subscriptions.filter((s) => !s.active);
+  // Add null check to prevent crash if subscriptions array is undefined
+  const cancelledSubscriptions = (financial.subscriptions || []).filter((s) => !s.active);
   const savings = cancelledSubscriptions.reduce((sum, sub) => sum + sub.cost, 0);
   
   // Calculate total portfolio value (simplified: just sum currentValue)
+  // Add null check to prevent crash if portfolioAssets array is undefined
   const totalPortfolioValue = useMemo(() => {
-    return financial.portfolioAssets.reduce(
+    return (financial.portfolioAssets || []).reduce(
       (sum, asset) => sum + asset.currentValue, 
       0
     );
