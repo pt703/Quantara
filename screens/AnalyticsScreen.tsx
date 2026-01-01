@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { View, StyleSheet, Dimensions, Pressable } from "react-native";
+import { View, StyleSheet, Dimensions } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -9,30 +9,32 @@ import Spacer from "@/components/Spacer";
 import { Spacing, Typography, BorderRadius, Colors } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useLearningProgress } from "@/hooks/useLearningProgress";
+import { useContextualBandit } from "@/hooks/useContextualBandit";
 import { modules } from "../mock/modules";
+import { SkillDomain } from "@/types";
 
 const { width: screenWidth } = Dimensions.get("window");
 
-const mockWeeklyData = [
-  { day: "Mon", minutes: 15, lessons: 2 },
-  { day: "Tue", minutes: 25, lessons: 3 },
-  { day: "Wed", minutes: 10, lessons: 1 },
-  { day: "Thu", minutes: 30, lessons: 4 },
-  { day: "Fri", minutes: 20, lessons: 2 },
-  { day: "Sat", minutes: 45, lessons: 5 },
-  { day: "Sun", minutes: 35, lessons: 3 },
-];
+const DOMAIN_LABELS: Record<SkillDomain, string> = {
+  budgeting: "Budgeting",
+  debt: "Debt",
+  investing: "Investing",
+  saving: "Saving",
+  credit: "Credit",
+};
 
-const mockMonthlyProgress = [
-  { week: "W1", progress: 15 },
-  { week: "W2", progress: 35 },
-  { week: "W3", progress: 52 },
-  { week: "W4", progress: 68 },
-];
+const DOMAIN_ICONS: Record<SkillDomain, keyof typeof Feather.glyphMap> = {
+  budgeting: "pie-chart",
+  debt: "trending-down",
+  investing: "trending-up",
+  saving: "dollar-sign",
+  credit: "credit-card",
+};
 
 export default function AnalyticsScreen() {
   const { theme } = useTheme();
   const { getLessonStatus } = useLearningProgress();
+  const { getAllPerformanceStats, getCategoryPerformance } = useContextualBandit();
 
   const stats = useMemo(() => {
     let completedLessons = 0;
@@ -56,18 +58,35 @@ export default function AnalyticsScreen() {
       });
     });
 
+    const allStats = getAllPerformanceStats();
+    const totalAttempts = allStats.reduce((sum, s) => sum + s.totalAttempts, 0);
+    const totalSuccessRate = allStats.reduce((sum, s) => sum + s.successRate, 0) / allStats.length;
+
     return {
       completedLessons,
       totalLessons,
       completedQuizzes,
       totalQuizzes,
-      streak: 7,
-      totalXP: 1920,
-      weeklyMinutes: mockWeeklyData.reduce((sum, d) => sum + d.minutes, 0),
+      totalAttempts,
+      successRate: Math.round(totalSuccessRate * 100),
     };
-  }, [getLessonStatus]);
+  }, [getLessonStatus, getAllPerformanceStats]);
 
-  const maxMinutes = Math.max(...mockWeeklyData.map((d) => d.minutes));
+  const domainPerformance = useMemo(() => {
+    const domains: SkillDomain[] = ["budgeting", "saving", "debt", "credit", "investing"];
+    return domains.map((domain) => {
+      const perf = getCategoryPerformance(domain);
+      return {
+        domain,
+        label: DOMAIN_LABELS[domain],
+        icon: DOMAIN_ICONS[domain],
+        successRate: Math.round(perf.successRate * 100),
+        attempts: perf.totalAttempts,
+        avgScore: Math.round(perf.averageScore * 100),
+        streak: perf.currentStreak > 0 ? perf.currentStreak : 0,
+      };
+    });
+  }, [getCategoryPerformance]);
 
   return (
     <ScreenScrollView>
@@ -76,57 +95,64 @@ export default function AnalyticsScreen() {
       <View style={styles.statsRow}>
         <ThemedView style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={[styles.statIcon, { backgroundColor: theme.primary + "15" }]}>
-            <Feather name="zap" size={20} color={theme.primary} />
+            <Feather name="activity" size={20} color={theme.primary} />
           </View>
-          <ThemedText style={styles.statValue}>{stats.streak}</ThemedText>
-          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Day Streak</ThemedText>
+          <ThemedText style={styles.statValue}>{stats.totalAttempts}</ThemedText>
+          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Activities</ThemedText>
         </ThemedView>
 
         <ThemedView style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={[styles.statIcon, { backgroundColor: theme.success + "15" }]}>
-            <Feather name="award" size={20} color={theme.success} />
+            <Feather name="book-open" size={20} color={theme.success} />
           </View>
-          <ThemedText style={styles.statValue}>{stats.totalXP}</ThemedText>
-          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Total XP</ThemedText>
+          <ThemedText style={styles.statValue}>{stats.completedLessons}</ThemedText>
+          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Lessons Done</ThemedText>
         </ThemedView>
 
         <ThemedView style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={[styles.statIcon, { backgroundColor: theme.warning + "15" }]}>
-            <Feather name="clock" size={20} color={theme.warning} />
+            <Feather name="percent" size={20} color={theme.warning} />
           </View>
-          <ThemedText style={styles.statValue}>{stats.weeklyMinutes}</ThemedText>
-          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Min This Week</ThemedText>
+          <ThemedText style={styles.statValue}>{stats.successRate}%</ThemedText>
+          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Success Rate</ThemedText>
         </ThemedView>
       </View>
 
       <Spacer height={Spacing.xl} />
 
       <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <ThemedText style={styles.cardTitle}>Weekly Activity</ThemedText>
+        <ThemedText style={styles.cardTitle}>Skill Performance</ThemedText>
         <ThemedText style={[styles.cardSubtitle, { color: theme.textSecondary }]}>
-          Minutes spent learning each day
+          Your performance across learning domains
         </ThemedText>
         <Spacer height={Spacing.xl} />
 
-        <View style={styles.chartContainer}>
-          {mockWeeklyData.map((item, index) => (
-            <View key={item.day} style={styles.barContainer}>
-              <View style={styles.barWrapper}>
-                <View
-                  style={[
-                    styles.bar,
-                    {
-                      height: (item.minutes / maxMinutes) * 120,
-                      backgroundColor: index === 5 ? theme.primary : theme.primary + "60",
-                    },
-                  ]}
-                />
+        {domainPerformance.map((item) => (
+          <View key={item.domain} style={styles.domainItem}>
+            <View style={styles.domainHeader}>
+              <View style={[styles.domainIcon, { backgroundColor: theme.primary + "15" }]}>
+                <Feather name={item.icon} size={16} color={theme.primary} />
               </View>
-              <ThemedText style={[styles.barLabel, { color: theme.textSecondary }]}>{item.day}</ThemedText>
-              <ThemedText style={[styles.barValue, { color: theme.primary }]}>{item.minutes}</ThemedText>
+              <ThemedText style={styles.domainLabel}>{item.label}</ThemedText>
+              <ThemedText style={[styles.domainScore, { color: theme.primary }]}>
+                {item.avgScore}%
+              </ThemedText>
             </View>
-          ))}
-        </View>
+            <Spacer height={Spacing.sm} />
+            <ProgressBar progress={item.avgScore} />
+            <View style={styles.domainStats}>
+              <ThemedText style={[styles.domainStat, { color: theme.textSecondary }]}>
+                {item.attempts} attempts
+              </ThemedText>
+              {item.streak > 0 ? (
+                <ThemedText style={[styles.domainStat, { color: theme.success }]}>
+                  {item.streak} streak
+                </ThemedText>
+              ) : null}
+            </View>
+            <Spacer height={Spacing.md} />
+          </View>
+        ))}
       </ThemedView>
 
       <Spacer height={Spacing.lg} />
@@ -159,38 +185,6 @@ export default function AnalyticsScreen() {
           </View>
           <Spacer height={Spacing.sm} />
           <ProgressBar progress={(stats.completedQuizzes / stats.totalQuizzes) * 100} />
-        </View>
-      </ThemedView>
-
-      <Spacer height={Spacing.lg} />
-
-      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <ThemedText style={styles.cardTitle}>Monthly Overview</ThemedText>
-        <ThemedText style={[styles.cardSubtitle, { color: theme.textSecondary }]}>
-          Your progress over the past month
-        </ThemedText>
-        <Spacer height={Spacing.xl} />
-
-        <View style={styles.monthlyChart}>
-          {mockMonthlyProgress.map((item, index) => (
-            <View key={item.week} style={styles.monthlyBar}>
-              <View style={styles.monthlyBarTrack}>
-                <View
-                  style={[
-                    styles.monthlyBarFill,
-                    {
-                      width: `${item.progress}%`,
-                      backgroundColor: theme.primary,
-                    },
-                  ]}
-                />
-              </View>
-              <View style={styles.monthlyBarLabels}>
-                <ThemedText style={[styles.monthlyLabel, { color: theme.textSecondary }]}>{item.week}</ThemedText>
-                <ThemedText style={[styles.monthlyValue, { color: theme.primary }]}>{item.progress}%</ThemedText>
-              </View>
-            </View>
-          ))}
         </View>
       </ThemedView>
 
@@ -274,31 +268,6 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     marginTop: Spacing.xs,
   },
-  chartContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-  },
-  barContainer: {
-    alignItems: "center",
-    flex: 1,
-  },
-  barWrapper: {
-    height: 120,
-    justifyContent: "flex-end",
-  },
-  bar: {
-    width: 24,
-    borderRadius: BorderRadius.xs,
-  },
-  barLabel: {
-    ...Typography.caption,
-    marginTop: Spacing.sm,
-  },
-  barValue: {
-    ...Typography.caption,
-    fontWeight: "600",
-  },
   progressItem: {
     marginBottom: Spacing.sm,
   },
@@ -315,32 +284,36 @@ const styles = StyleSheet.create({
     ...Typography.headline,
     fontWeight: "600",
   },
-  monthlyChart: {
-    gap: Spacing.lg,
+  domainItem: {
+    marginBottom: Spacing.xs,
   },
-  monthlyBar: {
+  domainHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.sm,
   },
-  monthlyBarTrack: {
-    height: 12,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 6,
-    overflow: "hidden",
+  domainIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  monthlyBarFill: {
-    height: "100%",
-    borderRadius: 6,
+  domainLabel: {
+    ...Typography.body,
+    flex: 1,
   },
-  monthlyBarLabels: {
+  domainScore: {
+    ...Typography.headline,
+    fontWeight: "600",
+  },
+  domainStats: {
     flexDirection: "row",
     justifyContent: "space-between",
+    marginTop: Spacing.xs,
   },
-  monthlyLabel: {
-    ...Typography.footnote,
-  },
-  monthlyValue: {
-    ...Typography.footnote,
-    fontWeight: "600",
+  domainStat: {
+    ...Typography.caption,
   },
   moduleProgressHeader: {
     flexDirection: "row",
