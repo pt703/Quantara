@@ -406,6 +406,28 @@ export interface BaselineAssessment {
   courseId: string;
 };
 
+// Pre-assessment result for course entry - identifies weak spots
+export interface CoursePreAssessmentResult {
+  courseId: string;
+  completedAt: string;
+  weakConcepts: string[];          // Concept IDs where user scored poorly
+  strongConcepts: string[];        // Concept IDs where user excelled
+  domainScores: Record<SkillDomain, number>;  // Per-domain score (0-100)
+  overallScore: number;            // Overall percentage
+  questionsAnswered: number;
+  questionsCorrect: number;
+}
+
+// Penalty question entry - tracks extra questions injected for wrong answers
+export interface PenaltyQuestion {
+  originalQuestionId: string;      // The question user got wrong
+  conceptId: string;               // Concept being remediated
+  penaltyQuestionIds: string[];    // IDs of penalty questions to answer
+  answeredCorrectly: number;       // How many penalty questions answered correctly
+  required: number;                // How many penalty questions required (default 2)
+  completed: boolean;              // Whether all penalty questions answered correctly
+}
+
 // Context vector for the contextual bandit algorithm
 // These features help the algorithm decide which lesson to recommend
 export interface LearningContext {

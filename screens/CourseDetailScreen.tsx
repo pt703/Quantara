@@ -41,14 +41,19 @@ type CourseDetailScreenProps = {
 // =============================================================================
 // MODULE INDICATOR COMPONENT
 // =============================================================================
+// Shows circle progress indicator around module icons
+// - Completed modules have green circle ring with checkmark
+// - Locked modules show lock icon
+// - Incomplete modules show book (reading) or help-circle (quiz) icon
 
 interface ModuleIndicatorProps {
   module: LessonModule;
   isCompleted: boolean;
   isLocked: boolean;
+  courseColor: string;
 }
 
-function ModuleIndicator({ module, isCompleted, isLocked }: ModuleIndicatorProps) {
+function ModuleIndicator({ module, isCompleted, isLocked, courseColor }: ModuleIndicatorProps) {
   const { theme } = useTheme();
   
   const getIndicatorStyle = () => {
@@ -57,6 +62,8 @@ function ModuleIndicator({ module, isCompleted, isLocked }: ModuleIndicatorProps
         bgColor: theme.border, 
         icon: 'lock' as const,
         iconColor: theme.textSecondary,
+        borderColor: 'transparent',
+        showRing: false,
       };
     }
     if (isCompleted) {
@@ -64,20 +71,29 @@ function ModuleIndicator({ module, isCompleted, isLocked }: ModuleIndicatorProps
         bgColor: '#10B981', 
         icon: 'check' as const,
         iconColor: '#FFFFFF',
+        borderColor: '#10B981',
+        showRing: true,
       };
     }
     return { 
       bgColor: theme.backgroundSecondary, 
       icon: module.type === 'quiz' ? 'help-circle' as const : 'book-open' as const,
       iconColor: theme.textSecondary,
+      borderColor: theme.border,
+      showRing: false,
     };
   };
   
   const style = getIndicatorStyle();
   
   return (
-    <View style={[styles.moduleIndicator, { backgroundColor: style.bgColor }]}>
-      <Feather name={style.icon} size={12} color={style.iconColor} />
+    <View style={[
+      styles.moduleIndicatorWrapper,
+      style.showRing && { borderColor: style.borderColor, borderWidth: 2 }
+    ]}>
+      <View style={[styles.moduleIndicator, { backgroundColor: style.bgColor }]}>
+        <Feather name={style.icon} size={12} color={style.iconColor} />
+      </View>
     </View>
   );
 }
@@ -171,6 +187,7 @@ function LessonCard({
               module={module}
               isCompleted={completedModules > idx}
               isLocked={isLocked}
+              courseColor={courseColor}
             />
           ))}
         </View>
@@ -222,10 +239,48 @@ export default function CourseDetailScreen({ navigation, route }: CourseDetailSc
     return course.lessons.length > 0 ? completedLessons / course.lessons.length : 0;
   }, [course, moduleProgress, isLessonComplete]);
   
+  // Navigate to the first incomplete module in the lesson
+  // If all modules complete, go to the first module for review
   const handleLessonPress = useCallback((lesson: Lesson, isLocked: boolean) => {
-    if (isLocked) return;
-    navigation.navigate('LessonPlayer', { lessonId: lesson.id, courseId: courseId });
-  }, [navigation, courseId]);
+    if (isLocked || !lesson.modules) return;
+    
+    const modules = lesson.modules;
+    const totalModules = modules.length;
+    
+    // Find first incomplete module
+    let targetModuleIndex = 0;
+    for (let i = 0; i < modules.length; i++) {
+      const progress = moduleProgress[modules[i].id];
+      if (!progress || progress.status !== 'completed') {
+        targetModuleIndex = i;
+        break;
+      }
+      targetModuleIndex = i; // All complete, default to last
+    }
+    
+    const targetModule = modules[targetModuleIndex];
+    
+    // Navigate to appropriate screen based on module type
+    if (targetModule.type === 'reading') {
+      navigation.navigate('ReadingModule', {
+        moduleId: targetModule.id,
+        lessonId: lesson.id,
+        courseId: courseId,
+        moduleIndex: targetModuleIndex,
+        totalModules: totalModules,
+        module: targetModule as any,
+      });
+    } else if (targetModule.type === 'quiz') {
+      navigation.navigate('QuizModule', {
+        moduleId: targetModule.id,
+        lessonId: lesson.id,
+        courseId: courseId,
+        moduleIndex: targetModuleIndex,
+        totalModules: totalModules,
+        module: targetModule as any,
+      });
+    }
+  }, [navigation, courseId, moduleProgress]);
   
   const renderLesson = useCallback(({ item, index }: { item: Lesson; index: number }) => {
     if (!course) return null;
@@ -469,10 +524,19 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     marginBottom: Spacing.sm,
   },
+  moduleIndicatorWrapper: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 0,
+    borderColor: 'transparent',
+  },
   moduleIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },

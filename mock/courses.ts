@@ -1961,6 +1961,28 @@ export function getLessonById(lessonId: string): { lesson: Lesson; course: Cours
   return undefined;
 }
 
+// Export helper to get a question by ID across all courses
+export function getQuestionById(questionId: string): Question | undefined {
+  for (const course of courses) {
+    for (const lesson of course.lessons) {
+      // Check legacy questions array
+      const legacyQuestion = lesson.questions.find(q => q.id === questionId);
+      if (legacyQuestion) return legacyQuestion;
+      
+      // Check module questions
+      if (lesson.modules) {
+        for (const module of lesson.modules) {
+          if (module.type === 'quiz' && 'questions' in module) {
+            const moduleQuestion = module.questions.find(q => q.id === questionId);
+            if (moduleQuestion) return moduleQuestion;
+          }
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
 // Export total stats
 export const courseStats = {
   totalCourses: courses.length,

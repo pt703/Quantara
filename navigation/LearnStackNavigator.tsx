@@ -16,8 +16,11 @@ import LessonPlayerScreen from "@/screens/LessonPlayerScreen";
 import PreAssessmentScreen from "@/screens/PreAssessmentScreen";
 import CourseDetailScreen from "@/screens/CourseDetailScreen";
 import TestYourSkillScreen from "@/screens/TestYourSkillScreen";
+import ReadingModuleScreen from "@/screens/ReadingModuleScreen";
+import QuizModuleScreen from "@/screens/QuizModuleScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { getCommonScreenOptions } from "@/navigation/screenOptions";
+import { ReadingModule, QuizModule } from "@/types";
 
 // Define the params for each screen in this stack
 export type LearnStackParamList = {
@@ -31,6 +34,23 @@ export type LearnStackParamList = {
   PreAssessment: { courseId: string };
   // Skill assessment
   TestYourSkill: undefined;
+  // New module screens for Coursera-style structure
+  ReadingModule: { 
+    moduleId: string; 
+    lessonId: string; 
+    courseId: string; 
+    moduleIndex: number; 
+    totalModules: number;
+    module: ReadingModule;
+  };
+  QuizModule: { 
+    moduleId: string; 
+    lessonId: string; 
+    courseId: string; 
+    moduleIndex: number; 
+    totalModules: number;
+    module: QuizModule;
+  };
 };
 
 const Stack = createNativeStackNavigator<LearnStackParamList>();
@@ -97,6 +117,26 @@ export default function LearnStackNavigator() {
           headerShown: false,
           presentation: 'card',
           gestureEnabled: true,
+        }}
+      />
+      {/* Reading module with Mark as Complete */}
+      <Stack.Screen
+        name="ReadingModule"
+        component={ReadingModuleScreen}
+        options={{ 
+          headerShown: false,
+          presentation: 'card',
+          gestureEnabled: true,
+        }}
+      />
+      {/* Quiz module with penalty questions */}
+      <Stack.Screen
+        name="QuizModule"
+        component={QuizModuleScreen}
+        options={{ 
+          headerShown: false,
+          presentation: 'card',
+          gestureEnabled: false, // Cannot leave until complete
         }}
       />
     </Stack.Navigator>
