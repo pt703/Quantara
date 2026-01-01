@@ -43,7 +43,12 @@ Preferred communication style: Simple, everyday language.
   - `useChallengeProgress`: Challenge status tracking
   - `useStorage`: Generic AsyncStorage wrapper with automatic JSON serialization
   - `useTheme`: Theme and color scheme management
-  - `useNotifications`: Push notification setup and management
+  - `useNotifications`: Push notification setup and management with settings persistence
+    - Challenge reminders (24-hour repeating for in-progress challenges)
+    - Challenge completion notifications
+    - New content alerts
+    - Settings persisted to AsyncStorage with Android notification channels
+    - Web platform shows informational notice (notifications require mobile device)
   - `useAuth`: Supabase authentication with sign up, login, logout, password reset
 
 **Authentication**:
