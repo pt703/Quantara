@@ -156,68 +156,43 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
       {/* ================================================================== */}
       {/* TEST YOUR SKILL */}
       {/* ================================================================== */}
-      {recommendations.length > 0 && (
-        <>
-          <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionTitle}>Test Your Current Skill</ThemedText>
-          </View>
+      <View style={styles.sectionHeader}>
+        <ThemedText style={styles.sectionTitle}>Test Your Skill</ThemedText>
+        <ThemedText style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>
+          Quick assessment to identify your strengths
+        </ThemedText>
+      </View>
 
-          <Spacer height={Spacing.sm} />
+      <Spacer height={Spacing.sm} />
 
-          {recommendations.slice(0, 1).map((rec) => {
-            // Find lesson details
-            const course = courses.find(c => c.id === rec.courseId);
-            const lesson = course?.lessons.find(l => l.id === rec.lessonId);
-            
-            if (!lesson || !course) return null;
+      <Pressable
+        style={({ pressed }) => [
+          styles.testSkillCard,
+          { 
+            backgroundColor: theme.primary + '15', 
+            borderColor: theme.primary,
+            opacity: pressed ? 0.8 : 1,
+          },
+        ]}
+        onPress={() => navigation.navigate('TestYourSkill')}
+      >
+        <View style={[styles.testSkillIcon, { backgroundColor: theme.primary }]}>
+          <Feather name="target" size={24} color="#FFFFFF" />
+        </View>
 
-            return (
-              <Pressable
-                key={rec.lessonId}
-                style={({ pressed }) => [
-                  styles.recommendationCard,
-                  { 
-                    backgroundColor: theme.primary + '15', 
-                    borderColor: theme.primary,
-                    opacity: pressed ? 0.8 : 1,
-                  },
-                ]}
-                onPress={() => navigation.navigate('LessonPlayer', { 
-                  lessonId: rec.lessonId, 
-                  courseId: rec.courseId 
-                })}
-              >
-                <View style={[styles.recommendationIcon, { backgroundColor: theme.primary }]}>
-                  <Feather name="play" size={24} color="#FFFFFF" />
-                </View>
+        <View style={styles.testSkillContent}>
+          <ThemedText style={styles.testSkillTitle}>
+            Take a Skill Assessment
+          </ThemedText>
+          <ThemedText style={[styles.testSkillSubtitle, { color: theme.textSecondary }]}>
+            10 questions across all topics
+          </ThemedText>
+        </View>
 
-                <View style={styles.recommendationContent}>
-                  <ThemedText style={styles.recommendationTitle} numberOfLines={1}>
-                    {lesson.title}
-                  </ThemedText>
-                  <ThemedText style={[styles.recommendationSubtitle, { color: theme.textSecondary }]}>
-                    {rec.reason}
-                  </ThemedText>
-                  <View style={styles.recommendationMeta}>
-                    <Feather name="clock" size={12} color={theme.textSecondary} />
-                    <ThemedText style={[styles.recommendationMetaText, { color: theme.textSecondary }]}>
-                      {lesson.estimatedMinutes} min
-                    </ThemedText>
-                    <Feather name="star" size={12} color="#F59E0B" style={{ marginLeft: Spacing.md }} />
-                    <ThemedText style={[styles.recommendationMetaText, { color: theme.textSecondary }]}>
-                      +{lesson.xpReward} XP
-                    </ThemedText>
-                  </View>
-                </View>
+        <Feather name="chevron-right" size={24} color={theme.primary} />
+      </Pressable>
 
-                <Feather name="chevron-right" size={24} color={theme.primary} />
-              </Pressable>
-            );
-          })}
-
-          <Spacer height={Spacing.xl} />
-        </>
-      )}
+      <Spacer height={Spacing.xl} />
 
       {/* ================================================================== */}
       {/* SKILL LEVELS */}
@@ -449,5 +424,31 @@ const styles = StyleSheet.create({
   courseProgressText: {
     ...Typography.caption,
     fontWeight: '600',
+  },
+  testSkillCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Spacing.lg,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 2,
+  },
+  testSkillIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.md,
+  },
+  testSkillContent: {
+    flex: 1,
+  },
+  testSkillTitle: {
+    ...Typography.headline,
+  },
+  testSkillSubtitle: {
+    ...Typography.subhead,
+    marginTop: 2,
   },
 });

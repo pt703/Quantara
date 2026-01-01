@@ -15,6 +15,7 @@ import LessonScreen from "@/screens/LessonScreen";
 import LessonPlayerScreen from "@/screens/LessonPlayerScreen";
 import PreAssessmentScreen from "@/screens/PreAssessmentScreen";
 import CourseDetailScreen from "@/screens/CourseDetailScreen";
+import TestYourSkillScreen from "@/screens/TestYourSkillScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { getCommonScreenOptions } from "@/navigation/screenOptions";
 
@@ -28,6 +29,8 @@ export type LearnStackParamList = {
   LessonPlayer: { lessonId: string; courseId: string };
   // Pre-assessment for first-time course entry
   PreAssessment: { courseId: string };
+  // Skill assessment
+  TestYourSkill: undefined;
 };
 
 const Stack = createNativeStackNavigator<LearnStackParamList>();
@@ -80,6 +83,16 @@ export default function LearnStackNavigator() {
       <Stack.Screen
         name="CourseDetail"
         component={CourseDetailScreen}
+        options={{ 
+          headerShown: false,
+          presentation: 'card',
+          gestureEnabled: true,
+        }}
+      />
+      {/* Test Your Skill assessment */}
+      <Stack.Screen
+        name="TestYourSkill"
+        component={TestYourSkillScreen}
         options={{ 
           headerShown: false,
           presentation: 'card',
