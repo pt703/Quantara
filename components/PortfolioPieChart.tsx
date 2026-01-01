@@ -110,17 +110,20 @@ function createArcPath(
 
 export function PortfolioPieChart({ assets }: PortfolioPieChartProps) {
   const { theme } = useTheme();
+  
+  // Ensure assets is always an array to prevent crashes
+  const safeAssets = assets || [];
 
   // Calculate total portfolio value and create pie segments
   const { total, segments } = useMemo(() => {
     // Calculate total value: just sum currentValue for each asset (simplified)
-    const totalValue = assets.reduce(
+    const totalValue = safeAssets.reduce(
       (sum, asset) => sum + asset.currentValue, 
       0
     );
     
     // Group assets by type and sum values
-    const grouped = assets.reduce<Record<string, number>>((acc, asset) => {
+    const grouped = safeAssets.reduce<Record<string, number>>((acc, asset) => {
       const type = asset.type || 'other';
       const assetValue = asset.currentValue;
       acc[type] = (acc[type] || 0) + assetValue;
@@ -147,10 +150,10 @@ export function PortfolioPieChart({ assets }: PortfolioPieChartProps) {
       .sort((a, b) => b.percentage - a.percentage);
 
     return { total: totalValue, segments: segs };
-  }, [assets]);
+  }, [safeAssets]);
 
   // If no assets, show empty state
-  if (assets.length === 0 || total === 0) {
+  if (safeAssets.length === 0 || total === 0) {
     return (
       <View style={styles.emptyContainer}>
         <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
