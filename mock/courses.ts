@@ -28,6 +28,7 @@ import {
   ReadingModule,
   QuizModule,
   ContentBlock,
+  ConceptVariant,
 } from '../types';
 
 // =============================================================================
@@ -165,8 +166,60 @@ function generateModulesForLesson(lesson: {
     conceptTags: [`${lesson.id}-practical`],
   } as ReadingModule);
   
-  // Quiz Module: Test understanding
+  // Quiz Module: Test understanding with adaptive difficulty
   // 80% mastery required to pass
+  // 
+  // ADAPTIVE QUIZ FLOW:
+  // 1. Questions are grouped by concept (conceptId field)
+  // 2. Each concept has 3 difficulty tiers: easy (1), medium (2), hard (3)
+  // 3. User is tested with HARD question first for efficiency
+  // 4. If incorrect, penalty cascade: easy → medium → hard
+  // 5. Total possible questions: 4 concepts × 3 tiers = 12
+  
+  // Build conceptVariants from the questions
+  // Group questions by conceptId, then find easy/medium/hard variants
+  const conceptMap = new Map<string, { easy?: string; medium?: string; hard?: string; name?: string }>();
+  
+  lesson.questions.forEach(q => {
+    // Access adaptive fields if they exist
+    const conceptId = (q as any).conceptId as string | undefined;
+    const difficultyTier = (q as any).difficultyTier as 1 | 2 | 3 | undefined;
+    
+    if (conceptId && difficultyTier) {
+      if (!conceptMap.has(conceptId)) {
+        conceptMap.set(conceptId, {});
+      }
+      const entry = conceptMap.get(conceptId)!;
+      
+      // Map tier to easy/medium/hard
+      if (difficultyTier === 1) entry.easy = q.id;
+      if (difficultyTier === 2) entry.medium = q.id;
+      if (difficultyTier === 3) entry.hard = q.id;
+      
+      // Extract concept name from ID (e.g., "budget-definition" → "Budget Definition")
+      entry.name = conceptId
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    }
+  });
+  
+  // Convert map to ConceptVariant array
+  const conceptVariants: ConceptVariant[] = [];
+  conceptMap.forEach((variants, conceptId) => {
+    if (variants.easy && variants.medium && variants.hard) {
+      conceptVariants.push({
+        conceptId,
+        conceptName: variants.name || conceptId,
+        variantGroup: `${lesson.id}-${conceptId}`,
+        domain: lesson.domain,
+        easyQuestionId: variants.easy,
+        mediumQuestionId: variants.medium,
+        hardQuestionId: variants.hard,
+      });
+    }
+  });
+  
   modules.push({
     id: `${lesson.id}-quiz`,
     type: 'quiz',
@@ -176,6 +229,8 @@ function generateModulesForLesson(lesson: {
     questions: lesson.questions,
     masteryThreshold: 0.8,
     conceptTags: lesson.questions.map(q => q.id),
+    // Include concept variants for adaptive quiz flow
+    conceptVariants: conceptVariants.length > 0 ? conceptVariants : undefined,
   } as QuizModule);
   
   return modules;
@@ -188,6 +243,19 @@ function generateModulesForLesson(lesson: {
 const moneyFoundationsLessons: Lesson[] = [
   // -------------------------------------------------------------------------
   // LESSON 1: What is a Budget?
+  // -------------------------------------------------------------------------
+  // 
+  // ADAPTIVE QUIZ STRUCTURE:
+  // - 4 concepts tested, each with 3 difficulty tiers (easy/medium/hard)
+  // - Total questions: 4 × 3 = 12 possible questions
+  // - Hard-first testing: user sees hard question first for each concept
+  // - Penalty cascade: wrong answer triggers easy → medium → hard sequence
+  // 
+  // CONCEPTS FOR THIS LESSON:
+  // 1. budget-definition - What a budget is and its purpose
+  // 2. budget-benefits - Benefits of budgeting (savings, control)
+  // 3. budget-equation - Income - Expenses = What's Left
+  // 4. budget-timing - When to create and review a budget
   // -------------------------------------------------------------------------
   {
     id: 'mf-lesson-1',
@@ -212,55 +280,225 @@ Without a budget, money disappears. Studies show people who budget save 20% more
 
 That's it! A budget just helps you plan this equation before spending, not after.`,
     questions: [
+      // =====================================================================
+      // CONCEPT 1: budget-definition - What a budget is
+      // =====================================================================
+      // EASY (Tier 1): Simple recall - what is a budget?
       {
-        id: 'mf-1-q1',
+        id: 'mf-1-c1-easy',
+        type: 'true_false',
+        question: 'A budget is a plan for how you will spend your money.',
+        correctAnswer: true,
+        explanation: 'Yes! A budget is simply a plan that helps you decide where your money goes.',
+        xpReward: 5,
+        difficulty: 'beginner',
+        conceptId: 'budget-definition',
+        variantGroup: 'mf-1-budget-definition',
+        difficultyTier: 1,
+      } as TrueFalseQuestion,
+      // MEDIUM (Tier 2): Applied understanding - identify budget purpose
+      {
+        id: 'mf-1-c1-medium',
         type: 'mcq',
-        question: 'What is the main purpose of a budget?',
+        question: 'What is the main purpose of creating a budget?',
         options: [
-          'To restrict all your spending',
+          'To restrict all your spending completely',
           'To plan where your money goes before you spend it',
           'To make you feel guilty about purchases',
-          'To track only your savings'
+          'To track only your savings account'
         ],
         correctAnswer: 1,
-        explanation: 'A budget is a plan for your money. It helps you decide where your money should go BEFORE you spend it, not after.',
+        explanation: 'A budget helps you decide where your money should go BEFORE you spend it. It\'s about planning, not restricting.',
         xpReward: 10,
         difficulty: 'beginner',
+        conceptId: 'budget-definition',
+        variantGroup: 'mf-1-budget-definition',
+        difficultyTier: 2,
       } as MCQQuestion,
+      // HARD (Tier 3): Analysis - distinguish budget from other tools
       {
-        id: 'mf-1-q2',
+        id: 'mf-1-c1-hard',
+        type: 'mcq',
+        question: 'Maria tracks every purchase she made last month. Is this the same as having a budget?',
+        options: [
+          'Yes, tracking spending is exactly what budgeting means',
+          'No, budgeting is about planning BEFORE spending, not just tracking',
+          'Yes, budgets are just records of past spending',
+          'No, budgets only track income, not spending'
+        ],
+        correctAnswer: 1,
+        explanation: 'Tracking spending shows where money WENT. Budgeting plans where money WILL GO. The key difference is planning ahead vs. looking back.',
+        xpReward: 15,
+        difficulty: 'intermediate',
+        conceptId: 'budget-definition',
+        variantGroup: 'mf-1-budget-definition',
+        difficultyTier: 3,
+      } as MCQQuestion,
+
+      // =====================================================================
+      // CONCEPT 2: budget-benefits - Why budgeting helps
+      // =====================================================================
+      // EASY (Tier 1): Simple recall - budgeting helps save
+      {
+        id: 'mf-1-c2-easy',
         type: 'true_false',
         question: 'People who budget tend to save more money than those who don\'t.',
         correctAnswer: true,
-        explanation: 'Research shows budgeters save approximately 20% more than non-budgeters because they have visibility into their spending.',
+        explanation: 'Research shows budgeters save approximately 20% more because they have visibility into their spending.',
+        xpReward: 5,
+        difficulty: 'beginner',
+        conceptId: 'budget-benefits',
+        variantGroup: 'mf-1-budget-benefits',
+        difficultyTier: 1,
+      } as TrueFalseQuestion,
+      // MEDIUM (Tier 2): Applied - identify specific benefit
+      {
+        id: 'mf-1-c2-medium',
+        type: 'mcq',
+        question: 'Studies show that people who budget save approximately how much more than non-budgeters?',
+        options: [
+          '5% more',
+          '10% more',
+          '20% more',
+          '50% more'
+        ],
+        correctAnswer: 2,
+        explanation: 'Research indicates budgeters save about 20% more than those who don\'t budget, because awareness leads to better decisions.',
         xpReward: 10,
         difficulty: 'beginner',
-      } as TrueFalseQuestion,
+        conceptId: 'budget-benefits',
+        variantGroup: 'mf-1-budget-benefits',
+        difficultyTier: 2,
+      } as MCQQuestion,
+      // HARD (Tier 3): Scenario - analyze why budgeting helps
       {
-        id: 'mf-1-q3',
+        id: 'mf-1-c2-hard',
+        type: 'scenario',
+        question: 'Jake earns $3,000/month but always runs out of money by day 25. He starts budgeting and notices he spends $400/month on food delivery. What\'s the MAIN reason budgeting helps Jake?',
+        scenario: 'Jake couldn\'t figure out where his money was going until he created a budget.',
+        options: [
+          { text: 'It forces him to spend less on everything', outcome: 'This restricts quality of life unnecessarily', impactScore: -20 },
+          { text: 'It gives him visibility into spending patterns', outcome: 'Jake can now make informed decisions about his priorities', impactScore: 100 },
+          { text: 'It automatically saves money for him', outcome: 'Budgets don\'t save automatically - they reveal opportunities', impactScore: 20 },
+          { text: 'It prevents him from using delivery apps', outcome: 'Budgets don\'t restrict access, they inform choices', impactScore: -10 }
+        ],
+        bestOptionIndex: 1,
+        explanation: 'Budgeting\'s primary benefit is VISIBILITY. When Jake sees where his money goes, he can make intentional choices rather than wondering where it went.',
+        xpReward: 15,
+        difficulty: 'intermediate',
+        conceptId: 'budget-benefits',
+        variantGroup: 'mf-1-budget-benefits',
+        difficultyTier: 3,
+      } as ScenarioQuestion,
+
+      // =====================================================================
+      // CONCEPT 3: budget-equation - The basic formula
+      // =====================================================================
+      // EASY (Tier 1): Recall - identify equation components
+      {
+        id: 'mf-1-c3-easy',
         type: 'fill_blank',
         question: 'Complete the budget equation:',
         blankedText: 'Income - ___ = What\'s Left',
         acceptedAnswers: ['expenses', 'Expenses', 'EXPENSES', 'spending', 'Spending'],
         explanation: 'The basic budget equation is: Income minus Expenses equals what you have left over.',
+        xpReward: 5,
+        difficulty: 'beginner',
+        conceptId: 'budget-equation',
+        variantGroup: 'mf-1-budget-equation',
+        difficultyTier: 1,
+      } as FillBlankQuestion,
+      // MEDIUM (Tier 2): Applied - calculate leftover
+      {
+        id: 'mf-1-c3-medium',
+        type: 'calculation',
+        question: 'If your monthly income is $2,500 and your expenses are $2,100, how much is left over?',
+        problemText: 'Income: $2,500\nExpenses: $2,100\nWhat\'s Left: ?',
+        correctAnswer: 400,
+        tolerance: 0,
+        unit: '$',
+        explanation: '$2,500 - $2,100 = $400. This leftover can go toward savings or paying off debt.',
         xpReward: 10,
         difficulty: 'beginner',
-      } as FillBlankQuestion,
+        conceptId: 'budget-equation',
+        variantGroup: 'mf-1-budget-equation',
+        difficultyTier: 2,
+      } as CalculationQuestion,
+      // HARD (Tier 3): Analysis - identify problem in equation
       {
-        id: 'mf-1-q4',
+        id: 'mf-1-c3-hard',
         type: 'mcq',
-        question: 'When should you create your budget?',
+        question: 'Emma\'s income is $2,000/month and her expenses are $2,200/month. What does this budget equation tell us?',
+        options: [
+          'Emma is saving $200 per month',
+          'Emma is going $200 into debt each month',
+          'Emma needs to earn $200 less',
+          'The equation is balanced correctly'
+        ],
+        correctAnswer: 1,
+        explanation: '$2,000 - $2,200 = -$200. A negative result means spending exceeds income, creating debt. Emma needs to cut expenses or increase income.',
+        xpReward: 15,
+        difficulty: 'intermediate',
+        conceptId: 'budget-equation',
+        variantGroup: 'mf-1-budget-equation',
+        difficultyTier: 3,
+      } as MCQQuestion,
+
+      // =====================================================================
+      // CONCEPT 4: budget-timing - When to budget
+      // =====================================================================
+      // EASY (Tier 1): Recall - budget before spending
+      {
+        id: 'mf-1-c4-easy',
+        type: 'true_false',
+        question: 'You should create your budget BEFORE the month begins, not after.',
+        correctAnswer: true,
+        explanation: 'Creating a budget before the month means you\'re planning ahead, not just tracking what already happened.',
+        xpReward: 5,
+        difficulty: 'beginner',
+        conceptId: 'budget-timing',
+        variantGroup: 'mf-1-budget-timing',
+        difficultyTier: 1,
+      } as TrueFalseQuestion,
+      // MEDIUM (Tier 2): Applied - identify correct timing
+      {
+        id: 'mf-1-c4-medium',
+        type: 'mcq',
+        question: 'When is the BEST time to create your monthly budget?',
         options: [
           'At the end of the month after spending',
           'Only when you\'re in debt',
           'Before the month begins',
-          'Only once a year'
+          'Only once a year in January'
         ],
         correctAnswer: 2,
-        explanation: 'A budget should be created BEFORE the month begins so you can plan your spending in advance.',
+        explanation: 'A budget should be created BEFORE the month begins so you can plan your spending in advance and make intentional choices.',
         xpReward: 10,
         difficulty: 'beginner',
+        conceptId: 'budget-timing',
+        variantGroup: 'mf-1-budget-timing',
+        difficultyTier: 2,
       } as MCQQuestion,
+      // HARD (Tier 3): Analysis - evaluate approach
+      {
+        id: 'mf-1-c4-hard',
+        type: 'scenario',
+        question: 'Tom creates his budget on the 15th of each month, looking at what he spent in the first half. Is this an effective approach?',
+        scenario: 'Tom waits until mid-month to budget because he wants to see his actual spending patterns first.',
+        options: [
+          { text: 'Yes, it\'s smart to see real spending before planning', outcome: 'By day 15, half the month\'s decisions were already unplanned', impactScore: 20 },
+          { text: 'No, he should budget before the month starts', outcome: 'Planning ahead allows all 30 days of intentional spending', impactScore: 100 },
+          { text: 'Yes, mid-month is the perfect time to adjust', outcome: 'Adjusting is fine, but initial plan should come earlier', impactScore: 40 },
+          { text: 'It doesn\'t matter when you budget', outcome: 'Timing matters - planning ahead beats reacting to spending', impactScore: -20 }
+        ],
+        bestOptionIndex: 1,
+        explanation: 'The best approach is to budget BEFORE the month starts, then review and adjust mid-month if needed. Tom\'s method leaves half the month unplanned.',
+        xpReward: 15,
+        difficulty: 'intermediate',
+        conceptId: 'budget-timing',
+        variantGroup: 'mf-1-budget-timing',
+        difficultyTier: 3,
+      } as ScenarioQuestion,
     ],
   },
 

@@ -226,9 +226,21 @@ export interface QuizModule {
   title: string;                 // e.g., "Quiz: Budget Basics"
   estimatedMinutes: number;
   xpReward: number;              // Larger XP for quiz completion
-  questions: Question[];         // Quiz questions
+  questions: Question[];         // All 12 questions (4 concepts × 3 tiers)
   masteryThreshold: number;      // Percentage required to pass (e.g., 0.8 = 80%)
   conceptTags: string[];         // Concepts tested
+  
+  // ==========================================================================
+  // ADAPTIVE QUIZ FIELDS - Added for LinUCB Contextual Bandit System
+  // ==========================================================================
+  // The quiz uses a hard-first testing strategy:
+  // 1. Present hard question for each concept
+  // 2. If correct → move to next concept (efficient for advanced learners)
+  // 3. If incorrect → trigger penalty cascade: easy → medium → hard
+  // 4. Total questions: 4 concepts × 3 tiers = 12 possible questions
+  
+  conceptVariants?: ConceptVariant[];  // The 4 concepts with their 3-tier variants
+                                       // Optional for backward compatibility
 }
 
 // Assessment module - standalone skill test (Test Your Skill section)
