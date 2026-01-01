@@ -198,12 +198,14 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         // LEGACY MODE: Original behavior for backward compatibility
         // =================================================================
         // All questions shown in order without adaptive difficulty
+        // Each question is treated as its own "concept" for mastery tracking
         
         const initialQueue = module.questions.map(q => ({
           question: q,
           isPenalty: false,
-          difficultyTier: 2 as const, // Default to medium
-          isInitialHardTest: false,
+          conceptId: q.id,  // Use question ID as concept ID for legacy tracking
+          difficultyTier: 3 as const, // Treat all legacy questions as "hard" so they mark mastery
+          isInitialHardTest: true,    // So correct answers mark mastery
         }));
         setQuestionQueue(initialQueue);
       }
@@ -424,6 +426,18 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
           difficultyTier: 3,
           isInitialHardTest: false,
           penaltyPosition: 2,
+        }]);
+      } else if (currentQueueItem.isInitialHardTest && conceptId && !module?.conceptVariants) {
+        // =============================================================
+        // LEGACY MODE: Re-queue wrong answers for retry
+        // =============================================================
+        // No penalty cascade for legacy quizzes, just add question back
+        setQuestionQueue(prev => [...prev, {
+          question: currentQuestion,
+          isPenalty: false,
+          conceptId,
+          difficultyTier: 3,
+          isInitialHardTest: true,
         }]);
       }
       // Note: Easy/Medium failures in cascade don't inject more questions,
