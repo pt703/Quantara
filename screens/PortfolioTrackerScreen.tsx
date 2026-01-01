@@ -70,26 +70,19 @@ export default function PortfolioTrackerScreen({ navigation }: PortfolioTrackerS
   const { theme } = useTheme();
   const { financial, setFinancial } = useUserData();
 
-  // State for adding new asset
+  // State for adding new asset (simplified - just name, type, total value)
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<AssetType>('stock');
-  const [newQuantity, setNewQuantity] = useState('');
   const [newValue, setNewValue] = useState('');
 
   const portfolioAssets = financial.portfolioAssets || [];
 
-  // Calculate totals
+  // Calculate total portfolio value (simplified: just sum all currentValue)
   const totalValue = portfolioAssets.reduce(
-    (sum, a) => sum + (a.quantity * a.currentValue), 
+    (sum, a) => sum + a.currentValue, 
     0
   );
-  const totalCost = portfolioAssets.reduce(
-    (sum, a) => sum + (a.quantity * a.purchasePrice), 
-    0
-  );
-  const totalGain = totalValue - totalCost;
-  const gainPercent = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
 
   // Delete asset - using functional update to avoid stale closures
   const deleteAsset = useCallback((id: string, name: string) => {
@@ -112,14 +105,13 @@ export default function PortfolioTrackerScreen({ navigation }: PortfolioTrackerS
     );
   }, [setFinancial]);
 
-  // Add new asset
+  // Add new asset (simplified: just total value, no quantity)
   const addAsset = useCallback(() => {
     if (!newName.trim() || !newValue.trim()) {
-      Alert.alert('Missing Info', 'Please enter at least name and value.');
+      Alert.alert('Missing Info', 'Please enter name and total value.');
       return;
     }
 
-    const quantity = parseFloat(newQuantity) || 1;
     const value = parseFloat(newValue);
 
     if (isNaN(value) || value <= 0) {
@@ -127,11 +119,12 @@ export default function PortfolioTrackerScreen({ navigation }: PortfolioTrackerS
       return;
     }
 
+    // Simplified model: quantity=1, currentValue = total value
     const newAsset: PortfolioAsset = {
       id: `asset-${Date.now()}`,
       name: newName.trim(),
       type: newType,
-      quantity: quantity,
+      quantity: 1,
       purchasePrice: value,
       currentValue: value,
     };
@@ -142,10 +135,9 @@ export default function PortfolioTrackerScreen({ navigation }: PortfolioTrackerS
     }));
 
     setNewName('');
-    setNewQuantity('');
     setNewValue('');
     setShowAdd(false);
-  }, [newName, newType, newQuantity, newValue, setFinancial]);
+  }, [newName, newType, newValue, setFinancial]);
 
   // Group assets by type
   const assetsByType = portfolioAssets.reduce((acc, asset) => {
@@ -169,24 +161,6 @@ export default function PortfolioTrackerScreen({ navigation }: PortfolioTrackerS
           <ThemedText style={styles.summaryValue}>
             £{totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </ThemedText>
-          {totalCost > 0 && (
-            <View style={[
-              styles.gainBadge, 
-              { backgroundColor: totalGain >= 0 ? '#22C55E20' : '#EF444420' }
-            ]}>
-              <Feather 
-                name={totalGain >= 0 ? 'trending-up' : 'trending-down'} 
-                size={14} 
-                color={totalGain >= 0 ? '#22C55E' : '#EF4444'} 
-              />
-              <ThemedText style={[
-                styles.gainText, 
-                { color: totalGain >= 0 ? '#22C55E' : '#EF4444' }
-              ]}>
-                {totalGain >= 0 ? '+' : ''}£{totalGain.toFixed(2)} ({gainPercent.toFixed(1)}%)
-              </ThemedText>
-            </View>
-          )}
         </View>
       </View>
 
@@ -243,15 +217,7 @@ export default function PortfolioTrackerScreen({ navigation }: PortfolioTrackerS
 
             <TextInput
               style={[styles.addInput, { color: theme.text, borderColor: theme.border }]}
-              placeholder="Quantity (e.g., 10)"
-              placeholderTextColor={theme.textSecondary}
-              value={newQuantity}
-              onChangeText={setNewQuantity}
-              keyboardType="decimal-pad"
-            />
-            <TextInput
-              style={[styles.addInput, { color: theme.text, borderColor: theme.border }]}
-              placeholder="Value per share/unit"
+              placeholder="Total value (e.g., 1000)"
               placeholderTextColor={theme.textSecondary}
               value={newValue}
               onChangeText={setNewValue}
@@ -286,38 +252,32 @@ export default function PortfolioTrackerScreen({ navigation }: PortfolioTrackerS
                 </View>
               </View>
               
-              {assets.map((asset) => {
-                const assetValue = asset.quantity * asset.currentValue;
-                const assetCost = asset.quantity * asset.purchasePrice;
-                const assetGain = assetValue - assetCost;
-                
-                return (
-                  <View 
-                    key={asset.id} 
-                    style={[styles.assetRow, { borderColor: theme.border }]}
-                  >
-                    <View style={styles.assetInfo}>
-                      <ThemedText style={styles.assetName}>{asset.name}</ThemedText>
-                      <ThemedText style={[styles.assetQuantity, { color: theme.textSecondary }]}>
-                        {asset.quantity} units @ £{asset.currentValue.toFixed(2)}
-                      </ThemedText>
-                    </View>
-                    
-                    <View style={styles.assetValueContainer}>
-                      <ThemedText style={styles.assetValue}>
-                        £{assetValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </ThemedText>
-                      <Pressable
-                        style={styles.deleteButton}
-                        onPress={() => deleteAsset(asset.id, asset.name)}
-                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                      >
-                        <Feather name="trash-2" size={18} color={theme.error} />
-                      </Pressable>
-                    </View>
+              {assets.map((asset) => (
+                <View 
+                  key={asset.id} 
+                  style={[styles.assetRow, { borderColor: theme.border }]}
+                >
+                  <View style={styles.assetInfo}>
+                    <ThemedText style={styles.assetName}>{asset.name}</ThemedText>
+                    <ThemedText style={[styles.assetType, { color: theme.textSecondary }]}>
+                      {ASSET_TYPES.find(t => t.type === asset.type)?.label || asset.type}
+                    </ThemedText>
                   </View>
-                );
-              })}
+                  
+                  <View style={styles.assetValueContainer}>
+                    <ThemedText style={styles.assetValue}>
+                      £{asset.currentValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </ThemedText>
+                    <Pressable
+                      style={styles.deleteButton}
+                      onPress={() => deleteAsset(asset.id, asset.name)}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    >
+                      <Feather name="trash-2" size={20} color={theme.error} />
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
             </View>
           ))
         )}
@@ -332,7 +292,7 @@ export default function PortfolioTrackerScreen({ navigation }: PortfolioTrackerS
           <Spacer height={Spacing.md} />
           
           {Object.entries(assetsByType).map(([type, assets]) => {
-            const typeValue = assets.reduce((sum, a) => sum + a.quantity * a.currentValue, 0);
+            const typeValue = assets.reduce((sum, a) => sum + a.currentValue, 0);
             const percentage = (typeValue / totalValue) * 100;
             
             return (
@@ -505,7 +465,7 @@ const styles = StyleSheet.create({
     ...Typography.body,
     fontWeight: '500',
   },
-  assetQuantity: {
+  assetType: {
     ...Typography.caption,
     marginTop: 2,
   },

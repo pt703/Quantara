@@ -57,10 +57,10 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const cancelledSubscriptions = financial.subscriptions.filter((s) => !s.active);
   const savings = cancelledSubscriptions.reduce((sum, sub) => sum + sub.cost, 0);
   
-  // Calculate total portfolio value: quantity * currentValue for each asset
+  // Calculate total portfolio value (simplified: just sum currentValue)
   const totalPortfolioValue = useMemo(() => {
     return financial.portfolioAssets.reduce(
-      (sum, asset) => sum + (asset.quantity * asset.currentValue), 
+      (sum, asset) => sum + asset.currentValue, 
       0
     );
   }, [financial.portfolioAssets]);

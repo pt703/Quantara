@@ -113,16 +113,16 @@ export function PortfolioPieChart({ assets }: PortfolioPieChartProps) {
 
   // Calculate total portfolio value and create pie segments
   const { total, segments } = useMemo(() => {
-    // Calculate total value: quantity * currentValue for each asset
+    // Calculate total value: just sum currentValue for each asset (simplified)
     const totalValue = assets.reduce(
-      (sum, asset) => sum + (asset.quantity * asset.currentValue), 
+      (sum, asset) => sum + asset.currentValue, 
       0
     );
     
     // Group assets by type and sum values
     const grouped = assets.reduce<Record<string, number>>((acc, asset) => {
       const type = asset.type || 'other';
-      const assetValue = asset.quantity * asset.currentValue;
+      const assetValue = asset.currentValue;
       acc[type] = (acc[type] || 0) + assetValue;
       return acc;
     }, {});
