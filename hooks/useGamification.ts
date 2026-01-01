@@ -40,10 +40,13 @@ const DEFAULT_GAMIFICATION_STATE: GamificationState = {
   maxHearts: MAX_HEARTS,
   xp: 0,                       // No XP yet
   level: 1,                    // Start at level 1
-  streak: 0,                   // No streak yet
+  streak: 0,                   // No streak yet - first lesson brings it to 1
   lastActiveDate: '',          // Will be set on first activity
   heartsLastRefilled: new Date().toISOString(),
 };
+
+// Hearts awarded when completing an entire course
+const COURSE_COMPLETION_HEARTS = 3;
 
 // Predefined achievements users can unlock
 const ACHIEVEMENTS: Achievement[] = [
@@ -180,6 +183,18 @@ function isYesterday(date1: Date, date2: Date): boolean {
   const yesterday = new Date(date2);
   yesterday.setDate(yesterday.getDate() - 1);
   return isSameDay(date1, yesterday);
+}
+
+/**
+ * Checks if the given date is within the last 24 hours.
+ * Used to determine if streak should be maintained or reset.
+ */
+function isWithin24Hours(dateStr: string): boolean {
+  if (!dateStr) return false;
+  const lastActive = new Date(dateStr);
+  const now = new Date();
+  const hoursDiff = (now.getTime() - lastActive.getTime()) / (1000 * 60 * 60);
+  return hoursDiff <= 24;
 }
 
 /**
@@ -400,9 +415,13 @@ export function useGamification() {
    * Updates the streak based on today's activity.
    * Call this when user completes a lesson.
    * 
-   * - If same day: no change
-   * - If yesterday: increment streak
-   * - If older: reset streak to 1
+   * STREAK MECHANICS:
+   * - First ever lesson: streak goes from 0 to 1
+   * - If same day as last lesson: no change (already counted)
+   * - If last lesson was yesterday: increment streak (consecutive day)
+   * - If more than 24 hours since last lesson: reset streak to 1
+   * 
+   * Streak requires completing at least one lesson every 24 hours to maintain.
    */
   const updateStreak = useCallback((): void => {
     const today = new Date();
@@ -413,16 +432,24 @@ export function useGamification() {
       return;
     }
 
-    let newStreak = 1; // Default: start/restart streak
+    let newStreak: number;
 
-    if (state.lastActiveDate) {
+    if (!state.lastActiveDate) {
+      // First ever lesson - streak starts at 1
+      newStreak = 1;
+    } else {
       const lastActive = new Date(state.lastActiveDate);
       
       if (isYesterday(lastActive, today)) {
         // Consecutive day - increment streak!
         newStreak = state.streak + 1;
+      } else if (isSameDay(lastActive, today)) {
+        // Same day, shouldn't reach here but keep streak
+        newStreak = state.streak;
+      } else {
+        // More than 1 day gap - streak resets to 1 (not 0, since they're doing a lesson now)
+        newStreak = 1;
       }
-      // If more than 1 day gap, streak resets to 1
     }
 
     const newState: GamificationState = {
@@ -434,6 +461,18 @@ export function useGamification() {
     setState(newState);
     setStoredState(newState);
   }, [state, setStoredState]);
+
+  /**
+   * Checks if the streak has expired (more than 24 hours without a lesson).
+   * Returns true if streak should be considered broken.
+   * Used for display purposes to show the user their streak status.
+   */
+  const isStreakExpired = useCallback((): boolean => {
+    if (!state.lastActiveDate || state.streak === 0) {
+      return false; // No streak to expire
+    }
+    return !isWithin24Hours(state.lastActiveDate);
+  }, [state.lastActiveDate, state.streak]);
 
   // ==========================================================================
   // ACHIEVEMENT MANAGEMENT
@@ -521,6 +560,8 @@ export function useGamification() {
 
   /**
    * Records a completed course.
+   * Awards 3 bonus hearts for course completion!
+   * This is a major reward to celebrate finishing a full course.
    */
   const recordCourseComplete = useCallback((): Achievement[] => {
     const newStats = {
@@ -529,8 +570,11 @@ export function useGamification() {
     };
     setStats(newStats);
 
+    // Award 3 hearts for completing a course - major reward!
+    addHearts(COURSE_COMPLETION_HEARTS);
+
     return checkAchievements();
-  }, [stats, setStats, checkAchievements]);
+  }, [stats, setStats, checkAchievements, addHearts]);
 
   // ==========================================================================
   // COMPUTED VALUES
@@ -583,6 +627,7 @@ export function useGamification() {
 
     // Streak actions
     updateStreak,
+    isStreakExpired,
 
     // Lesson/Course tracking
     recordLessonComplete,
