@@ -18,8 +18,8 @@ import {
   View, 
   Pressable, 
   TextInput,
-  Alert,
 } from 'react-native';
+import { showConfirmAlert, showAlert } from '@/utils/crossPlatformAlert';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
@@ -65,33 +65,26 @@ export default function DebtTrackerScreen({ navigation }: DebtTrackerScreenProps
 
   // Delete debt - using functional update to avoid stale closures
   const deleteDebt = useCallback((id: string, name: string) => {
-    Alert.alert(
+    showConfirmAlert(
       'Delete Debt',
       `Are you sure you want to remove ${name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: () => {
-            setFinancial(prev => {
-              const updatedItems = (prev.debtItems || []).filter(d => d.id !== id);
-              return {
-                ...prev,
-                debtItems: updatedItems,
-                totalDebt: updatedItems.reduce((sum, d) => sum + d.balance, 0),
-              };
-            });
-          },
-        },
-      ]
+      () => {
+        setFinancial(prev => {
+          const updatedItems = (prev.debtItems || []).filter(d => d.id !== id);
+          return {
+            ...prev,
+            debtItems: updatedItems,
+            totalDebt: updatedItems.reduce((sum, d) => sum + d.balance, 0),
+          };
+        });
+      }
     );
   }, [setFinancial]);
 
   // Add new debt
   const addDebt = useCallback(() => {
     if (!newName.trim() || !newBalance.trim()) {
-      Alert.alert('Missing Info', 'Please enter at least name and balance.');
+      showAlert('Missing Info', 'Please enter at least name and balance.');
       return;
     }
 
@@ -100,7 +93,7 @@ export default function DebtTrackerScreen({ navigation }: DebtTrackerScreenProps
     const minPayment = parseFloat(newMinPayment) || 0;
 
     if (isNaN(balance) || balance <= 0) {
-      Alert.alert('Invalid Balance', 'Please enter a valid balance.');
+      showAlert('Invalid Balance', 'Please enter a valid balance.');
       return;
     }
 

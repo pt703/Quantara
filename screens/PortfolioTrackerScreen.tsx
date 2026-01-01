@@ -18,8 +18,8 @@ import {
   View, 
   Pressable, 
   TextInput,
-  Alert,
 } from 'react-native';
+import { showConfirmAlert, showAlert } from '@/utils/crossPlatformAlert';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
@@ -86,36 +86,29 @@ export default function PortfolioTrackerScreen({ navigation }: PortfolioTrackerS
 
   // Delete asset - using functional update to avoid stale closures
   const deleteAsset = useCallback((id: string, name: string) => {
-    Alert.alert(
+    showConfirmAlert(
       'Delete Asset',
       `Are you sure you want to remove ${name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: () => {
-            setFinancial(prev => ({
-              ...prev,
-              portfolioAssets: (prev.portfolioAssets || []).filter(a => a.id !== id),
-            }));
-          },
-        },
-      ]
+      () => {
+        setFinancial(prev => ({
+          ...prev,
+          portfolioAssets: (prev.portfolioAssets || []).filter(a => a.id !== id),
+        }));
+      }
     );
   }, [setFinancial]);
 
   // Add new asset (simplified: just total value, no quantity)
   const addAsset = useCallback(() => {
     if (!newName.trim() || !newValue.trim()) {
-      Alert.alert('Missing Info', 'Please enter name and total value.');
+      showAlert('Missing Info', 'Please enter name and total value.');
       return;
     }
 
     const value = parseFloat(newValue);
 
     if (isNaN(value) || value <= 0) {
-      Alert.alert('Invalid Value', 'Please enter a valid value.');
+      showAlert('Invalid Value', 'Please enter a valid value.');
       return;
     }
 

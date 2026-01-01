@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Pressable, Switch, Alert } from 'react-native';
+import { View, StyleSheet, Pressable, Switch } from 'react-native';
+import { showConfirmAlert } from '@/utils/crossPlatformAlert';
 import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
@@ -18,16 +19,14 @@ export default function SettingsScreen() {
   const [reminderNotifications, setReminderNotifications] = useState(true);
 
   const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log Out',
-        style: 'destructive',
-        onPress: () => {
-          navigation.navigate('Welcome' as never);
-        },
+    showConfirmAlert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      () => {
+        navigation.navigate('Welcome' as never);
       },
-    ]);
+      'Log Out'
+    );
   };
 
   const SettingRow = ({

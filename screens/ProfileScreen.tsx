@@ -14,7 +14,8 @@
 // =============================================================================
 
 import React, { useMemo } from "react";
-import { StyleSheet, Pressable, View, Alert } from "react-native";
+import { StyleSheet, Pressable, View } from "react-native";
+import { showAlert } from '@/utils/crossPlatformAlert';
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from "@/components/ThemedText";
@@ -49,7 +50,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const handleSignOut = async () => {
     const { error } = await signOut();
     if (error) {
-      Alert.alert('Error', 'Failed to sign out. Please try again.');
+      showAlert('Error', 'Failed to sign out. Please try again.');
     }
   };
 

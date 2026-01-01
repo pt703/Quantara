@@ -18,8 +18,8 @@ import {
   View, 
   Pressable, 
   TextInput,
-  Alert,
 } from 'react-native';
+import { showConfirmAlert, showAlert } from '@/utils/crossPlatformAlert';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
@@ -72,35 +72,28 @@ export default function SubscriptionManagerScreen({ navigation }: SubscriptionMa
 
   // Delete subscription - using functional update to avoid stale closures
   const deleteSubscription = useCallback((id: string, name: string) => {
-    Alert.alert(
+    showConfirmAlert(
       'Delete Subscription',
       `Are you sure you want to remove ${name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: () => {
-            setFinancial(prev => ({
-              ...prev,
-              subscriptions: prev.subscriptions.filter(s => s.id !== id),
-            }));
-          },
-        },
-      ]
+      () => {
+        setFinancial(prev => ({
+          ...prev,
+          subscriptions: prev.subscriptions.filter(s => s.id !== id),
+        }));
+      }
     );
   }, [setFinancial]);
 
   // Add new subscription
   const addSubscription = useCallback(() => {
     if (!newName.trim() || !newCost.trim()) {
-      Alert.alert('Missing Info', 'Please enter both name and cost.');
+      showAlert('Missing Info', 'Please enter both name and cost.');
       return;
     }
 
     const cost = parseFloat(newCost);
     if (isNaN(cost) || cost <= 0) {
-      Alert.alert('Invalid Cost', 'Please enter a valid cost.');
+      showAlert('Invalid Cost', 'Please enter a valid cost.');
       return;
     }
 

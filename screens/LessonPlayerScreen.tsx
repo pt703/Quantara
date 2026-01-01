@@ -21,8 +21,8 @@ import {
   Pressable, 
   Modal,
   ScrollView,
-  Alert,
 } from 'react-native';
+import { showAlert, showConfirmAlert } from '@/utils/crossPlatformAlert';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
@@ -312,17 +312,12 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
    * Called when user wants to exit the lesson early.
    */
   const handleExit = useCallback(() => {
-    Alert.alert(
+    showConfirmAlert(
       'Exit Lesson?',
       'Your progress will not be saved if you leave now.',
-      [
-        { text: 'Stay', style: 'cancel' },
-        { 
-          text: 'Exit', 
-          style: 'destructive',
-          onPress: () => navigation.goBack(),
-        },
-      ]
+      () => navigation.goBack(),
+      'Exit',
+      'Stay'
     );
   }, [navigation]);
 
