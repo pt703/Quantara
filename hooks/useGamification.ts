@@ -248,7 +248,7 @@ function getStreakMultiplier(streak: number): number {
  */
 export function useGamification() {
   // Load persisted state from AsyncStorage
-  const [storedState, setStoredState, isLoading] = useStorage<GamificationState>(
+  const [storedState, setStoredState, isLoading, reloadState, stateVersion] = useStorage<GamificationState>(
     GAMIFICATION_STORAGE_KEY,
     DEFAULT_GAMIFICATION_STATE
   );
@@ -257,13 +257,13 @@ export function useGamification() {
   const [state, setState] = useState<GamificationState>(DEFAULT_GAMIFICATION_STATE);
   
   // Track unlocked achievements
-  const [unlockedAchievements, setUnlockedAchievements] = useStorage<string[]>(
+  const [unlockedAchievements, setUnlockedAchievements, , reloadAchievements] = useStorage<string[]>(
     'quantara_achievements',
     []
   );
 
   // Track various stats for achievement checking
-  const [stats, setStats] = useStorage<{
+  const [stats, setStats, , reloadStats] = useStorage<{
     lessonsCompleted: number;
     coursesCompleted: number;
     perfectScores: number;
@@ -273,11 +273,16 @@ export function useGamification() {
     perfectScores: 0,
   });
 
+  // Reload all gamification data from storage
+  const reload = useCallback(async () => {
+    await Promise.all([reloadState(), reloadAchievements(), reloadStats()]);
+  }, [reloadState, reloadAchievements, reloadStats]);
+
   // ==========================================================================
   // INITIALIZATION & HEART REGENERATION
   // ==========================================================================
 
-  // When stored state loads, apply heart regeneration
+  // When stored state loads or changes, apply heart regeneration and sync local state
   useEffect(() => {
     if (!isLoading && storedState) {
       // Calculate regenerated hearts based on time passed
@@ -303,7 +308,7 @@ export function useGamification() {
         setStoredState(updatedState);
       }
     }
-  }, [isLoading, storedState, setStoredState]);
+  }, [isLoading, storedState, stateVersion, setStoredState]);
 
   // ==========================================================================
   // HEART MANAGEMENT
@@ -675,6 +680,9 @@ export function useGamification() {
 
     // Stats
     stats,
+
+    // Reload from storage
+    reload,
   };
 }
 

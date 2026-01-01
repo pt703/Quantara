@@ -10,9 +10,10 @@
 //
 // =============================================================================
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -84,7 +85,8 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
     hearts, 
     todayXP,
     level, 
-    streak, 
+    streak,
+    reload: reloadGamification,
   } = useGamification();
   
   // Adaptive learning state
@@ -95,12 +97,21 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
     getCourseProgress,
     getOverallProgress,
     isCourseAssessed,
+    reload: reloadLearning,
   } = useAdaptiveLearning(streak);
 
-  // Refresh recommendations on mount
-  useEffect(() => {
-    getPersonalizedLessons(3);
-  }, []);
+  // Refresh data when screen comes into focus (e.g., returning from a lesson)
+  // Note: We intentionally exclude getPersonalizedLessons from deps to prevent infinite loops
+  // The reload functions are stable, but getPersonalizedLessons changes on every state update
+  useFocusEffect(
+    useCallback(() => {
+      const refreshData = async () => {
+        await Promise.all([reloadGamification(), reloadLearning()]);
+        getPersonalizedLessons(3);
+      };
+      refreshData();
+    }, [reloadGamification, reloadLearning]) // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // Overall progress
   const overallProgress = useMemo(() => getOverallProgress(), [getOverallProgress]);

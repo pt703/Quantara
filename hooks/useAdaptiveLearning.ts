@@ -121,41 +121,53 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
   // ==========================================================================
 
   // User's skill levels across domains
-  const [skills, setSkills, skillsLoading] = useStorage<SkillProfile>(
+  const [skills, setSkills, skillsLoading, reloadSkills, skillsVersion] = useStorage<SkillProfile>(
     SKILLS_STORAGE_KEY,
     DEFAULT_SKILLS
   );
 
   // Contextual bandit algorithm state
-  const [banditState, setBanditState, banditLoading] = useStorage<BanditState>(
+  const [banditState, setBanditState, banditLoading, reloadBandit] = useStorage<BanditState>(
     BANDIT_STORAGE_KEY,
     createInitialBanditState()
   );
 
   // List of completed lesson IDs
-  const [completedLessons, setCompletedLessons, completedLoading] = useStorage<string[]>(
+  const [completedLessons, setCompletedLessons, completedLoading, reloadCompleted, completedVersion] = useStorage<string[]>(
     COMPLETED_LESSONS_KEY,
     []
   );
 
   // History of all lesson attempts (for research/analytics)
-  const [lessonAttempts, setLessonAttempts] = useStorage<LessonAttemptLog[]>(
+  const [lessonAttempts, setLessonAttempts, , reloadAttempts] = useStorage<LessonAttemptLog[]>(
     LESSON_ATTEMPTS_KEY,
     []
   );
 
   // Courses that have been assessed (user took pre-assessment)
-  const [assessedCourses, setAssessedCourses] = useStorage<string[]>(
+  const [assessedCourses, setAssessedCourses, , reloadAssessed] = useStorage<string[]>(
     ASSESSED_COURSES_KEY,
     []
   );
 
   // Baseline assessments - stores pre-assessment results separately from displayed skills
   // These are used by the contextual bandit for recommendations but don't show as progress
-  const [baselineAssessments, setBaselineAssessments] = useStorage<BaselineAssessment[]>(
+  const [baselineAssessments, setBaselineAssessments, , reloadBaselines] = useStorage<BaselineAssessment[]>(
     BASELINE_ASSESSMENTS_KEY,
     []
   );
+
+  // Reload all adaptive learning data from storage
+  const reload = useCallback(async () => {
+    await Promise.all([
+      reloadSkills(), 
+      reloadBandit(), 
+      reloadCompleted(), 
+      reloadAttempts(), 
+      reloadAssessed(), 
+      reloadBaselines()
+    ]);
+  }, [reloadSkills, reloadBandit, reloadCompleted, reloadAttempts, reloadAssessed, reloadBaselines]);
 
   // ==========================================================================
   // LOCAL STATE
@@ -493,7 +505,7 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
       total: course.lessons.length,
       percentage: (completed / course.lessons.length) * 100,
     };
-  }, [completedLessons]);
+  }, [completedLessons, completedVersion]);
 
   /**
    * Gets overall progress across all courses.
@@ -520,14 +532,14 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
       totalCourses: courses.length,
       percentage: (lessonsCompleted / totalLessons) * 100,
     };
-  }, [completedLessons, getCourseProgress]);
+  }, [completedLessons, completedVersion, getCourseProgress]);
 
   /**
    * Checks if a specific lesson is completed.
    */
   const isLessonCompleted = useCallback((lessonId: string): boolean => {
     return completedLessons.includes(lessonId);
-  }, [completedLessons]);
+  }, [completedLessons, completedVersion]);
 
   /**
    * Gets the next lesson in sequence for a course.
@@ -544,7 +556,7 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
     }
 
     return null; // Course complete
-  }, [completedLessons]);
+  }, [completedLessons, completedVersion]);
 
   // ==========================================================================
   // COMPUTED VALUES
@@ -562,7 +574,7 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
     return Math.round(
       numericSkills.reduce((a, b) => a + b, 0) / numericSkills.length
     );
-  }, [skills]);
+  }, [skills, skillsVersion]);
 
   // Weakest skill domain
   const weakestSkill = useMemo((): SkillDomain => {
@@ -576,7 +588,7 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
     
     skillEntries.sort((a, b) => a[1] - b[1]);
     return skillEntries[0][0];
-  }, [skills]);
+  }, [skills, skillsVersion]);
 
   // Strongest skill domain
   const strongestSkill = useMemo((): SkillDomain => {
@@ -590,7 +602,7 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
     
     skillEntries.sort((a, b) => b[1] - a[1]);
     return skillEntries[0][0];
-  }, [skills]);
+  }, [skills, skillsVersion]);
 
   // ==========================================================================
   // RETURN VALUES
@@ -645,6 +657,9 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
 
     // Course data
     courses,
+
+    // Reload from storage
+    reload,
   };
 }
 
