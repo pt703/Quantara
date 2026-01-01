@@ -153,19 +153,127 @@ export type Question =
   | SimulationQuestion;
 
 // =============================================================================
+// MODULE TYPES - Coursera-style Learning Structure
+// =============================================================================
+// New hierarchy: Course > Lesson > Module (4 modules per lesson)
+// - 3 interactive reading modules
+// - 1 quiz module at the end
+// Supports mastery-based gating and adaptive remediation
+
+// Types of modules within a lesson
+export type ModuleType = 'reading' | 'quiz' | 'assessment';
+
+// Animation presets for reading modules to make content engaging
+export type AnimationPreset = 
+  | 'fade_in'         // Simple fade in
+  | 'slide_up'        // Slide up from bottom
+  | 'scale_in'        // Scale from small to full
+  | 'typewriter'      // Text appears letter by letter
+  | 'highlight';      // Key terms highlight in sequence
+
+// Concept tags link related questions across different formats
+// Used for mastery gating - user must answer variant after wrong answer
+export interface ConceptTag {
+  id: string;                    // e.g., "budget-definition"
+  name: string;                  // Human readable: "What is a budget"
+  domain: SkillDomain;           // Which skill domain
+  relatedQuestionIds: string[];  // All questions testing this concept
+}
+
+// A content block within a reading module
+export interface ContentBlock {
+  type: 'text' | 'highlight' | 'example' | 'tip' | 'warning' | 'interactive';
+  content: string;               // Markdown or plain text
+  animationPreset?: AnimationPreset;
+  delayMs?: number;              // Delay before showing (for sequencing)
+}
+
+// Reading module - interactive content with animations
+export interface ReadingModule {
+  id: string;
+  type: 'reading';
+  title: string;                 // Module title
+  estimatedMinutes: number;      // Time to read
+  xpReward: number;              // Small XP for completing reading
+  contentBlocks: ContentBlock[]; // Animated content blocks
+  conceptTags: string[];         // Concept IDs covered in this module
+}
+
+// Quiz module - questions with mastery requirements
+export interface QuizModule {
+  id: string;
+  type: 'quiz';
+  title: string;                 // e.g., "Quiz: Budget Basics"
+  estimatedMinutes: number;
+  xpReward: number;              // Larger XP for quiz completion
+  questions: Question[];         // Quiz questions
+  masteryThreshold: number;      // Percentage required to pass (e.g., 0.8 = 80%)
+  conceptTags: string[];         // Concepts tested
+}
+
+// Assessment module - standalone skill test (Test Your Skill section)
+export interface AssessmentModule {
+  id: string;
+  type: 'assessment';
+  title: string;
+  estimatedMinutes: number;
+  xpReward: number;
+  questions: Question[];
+  feedsIntoLessons: boolean;     // If true, wrong answers add to remediation
+}
+
+// Union type for all module types
+export type LessonModule = ReadingModule | QuizModule | AssessmentModule;
+
+// Progress tracking for a single module
+export interface ModuleProgress {
+  moduleId: string;
+  status: CompletionStatus;
+  score?: number;                // Quiz/assessment score (0-100)
+  attempts: number;              // Number of attempts
+  lastAttemptDate?: string;      // ISO timestamp
+  masteryAchieved: boolean;      // Whether user has mastered this module
+}
+
+// Progress tracking for a lesson (all modules)
+export interface LessonProgress {
+  lessonId: string;
+  moduleProgress: Record<string, ModuleProgress>;
+  overallStatus: CompletionStatus;
+  canProceed: boolean;           // Whether user can advance to next lesson
+}
+
+// Wrong answer entry for remediation tracking
+export interface WrongAnswerEntry {
+  questionId: string;
+  conceptId: string;             // Which concept was missed
+  questionType: QuestionType;    // Format of failed question
+  timestamp: string;             // When the error occurred
+  lessonId: string;              // Where the error occurred
+  requiresRemediation: boolean;  // Whether user must retry
+  remediationComplete: boolean;  // Whether user has passed variant
+  variantQuestionId?: string;    // ID of the variant question to answer
+}
+
+// =============================================================================
 // LESSON & COURSE STRUCTURES
 // =============================================================================
 
-// A single lesson within a course
+// A single lesson within a course (Coursera-style with 4 modules)
 export interface Lesson {
   id: string;                    // Unique identifier
   title: string;                 // Display title
   type: LessonType;              // What kind of lesson
-  estimatedMinutes: number;      // Time to complete
+  estimatedMinutes: number;      // Time to complete all modules
   completionStatus: CompletionStatus;
   domain: SkillDomain;           // Which skill this teaches
   difficulty: DifficultyLevel;   // Lesson difficulty
   xpReward: number;              // Total XP for completing
+  
+  // New: Coursera-style module structure
+  modules: LessonModule[];       // Array of 4 modules (3 reading + 1 quiz)
+  
+  // Legacy support - will be migrated to modules
   content?: string;              // Markdown content for reading
   questions: Question[];         // Interactive questions in this lesson
 }

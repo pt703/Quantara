@@ -24,7 +24,93 @@ import {
   OrderingQuestion,
   ScenarioQuestion,
   CalculationQuestion,
+  LessonModule,
+  ReadingModule,
+  QuizModule,
+  ContentBlock,
 } from '../types';
+
+// =============================================================================
+// MODULE GENERATION HELPER
+// =============================================================================
+// Converts legacy lesson content/questions to the new Coursera-style modules.
+// Each lesson gets 4 modules: 3 reading + 1 quiz
+
+function generateModulesForLesson(lesson: {
+  id: string;
+  title: string;
+  content?: string;
+  questions: Question[];
+  domain: string;
+}): LessonModule[] {
+  const modules: LessonModule[] = [];
+  
+  // Parse content into sections for reading modules
+  const contentSections = lesson.content?.split('\n## ') || [];
+  const mainSection = contentSections[0] || '';
+  const subSections = contentSections.slice(1);
+  
+  // Reading Module 1: Introduction
+  modules.push({
+    id: `${lesson.id}-mod-1`,
+    type: 'reading',
+    title: 'Introduction',
+    estimatedMinutes: 2,
+    xpReward: 5,
+    contentBlocks: [
+      {
+        type: 'text',
+        content: mainSection.replace(/^#\s+.*\n/, ''),
+        animationPreset: 'fade_in',
+      },
+    ],
+    conceptTags: [`${lesson.id}-intro`],
+  } as ReadingModule);
+  
+  // Reading Module 2: Key Concepts
+  modules.push({
+    id: `${lesson.id}-mod-2`,
+    type: 'reading',
+    title: 'Key Concepts',
+    estimatedMinutes: 2,
+    xpReward: 5,
+    contentBlocks: subSections.slice(0, Math.ceil(subSections.length / 2)).map(section => ({
+      type: 'highlight' as const,
+      content: `## ${section}`,
+      animationPreset: 'slide_up' as const,
+    })),
+    conceptTags: [`${lesson.id}-concepts`],
+  } as ReadingModule);
+  
+  // Reading Module 3: Deep Dive
+  modules.push({
+    id: `${lesson.id}-mod-3`,
+    type: 'reading',
+    title: 'Deep Dive',
+    estimatedMinutes: 2,
+    xpReward: 5,
+    contentBlocks: subSections.slice(Math.ceil(subSections.length / 2)).map(section => ({
+      type: 'example' as const,
+      content: `## ${section}`,
+      animationPreset: 'scale_in' as const,
+    })),
+    conceptTags: [`${lesson.id}-deep`],
+  } as ReadingModule);
+  
+  // Quiz Module: Test understanding
+  modules.push({
+    id: `${lesson.id}-quiz`,
+    type: 'quiz',
+    title: `Quiz: ${lesson.title}`,
+    estimatedMinutes: 3,
+    xpReward: 25,
+    questions: lesson.questions,
+    masteryThreshold: 0.8, // 80% to pass
+    conceptTags: lesson.questions.map(q => q.id),
+  } as QuizModule);
+  
+  return modules;
+}
 
 // =============================================================================
 // COURSE 1: MONEY FOUNDATIONS
@@ -1819,6 +1905,14 @@ Apply your knowledge carefully. You've got this!`,
 // COURSE EXPORTS
 // =============================================================================
 
+// Process lessons to add module structure
+function processLessonsWithModules(lessons: Lesson[]): Lesson[] {
+  return lessons.map(lesson => ({
+    ...lesson,
+    modules: generateModulesForLesson(lesson),
+  }));
+}
+
 // Course 1: Money Foundations
 export const moneyFoundationsCourse: Course = {
   id: 'course-money-foundations',
@@ -1827,7 +1921,7 @@ export const moneyFoundationsCourse: Course = {
   icon: 'dollar-sign',
   color: '#10B981',  // Green
   domain: 'budgeting',
-  lessons: moneyFoundationsLessons,
+  lessons: processLessonsWithModules(moneyFoundationsLessons),
   totalXP: moneyFoundationsLessons.reduce((sum, l) => sum + l.xpReward, 0),
   estimatedHours: Math.round(moneyFoundationsLessons.reduce((sum, l) => sum + l.estimatedMinutes, 0) / 60 * 10) / 10,
 };
@@ -1840,7 +1934,7 @@ export const creditDebtCourse: Course = {
   icon: 'credit-card',
   color: '#3B82F6',  // Blue
   domain: 'debt',
-  lessons: creditDebtLessons,
+  lessons: processLessonsWithModules(creditDebtLessons),
   totalXP: creditDebtLessons.reduce((sum, l) => sum + l.xpReward, 0),
   estimatedHours: Math.round(creditDebtLessons.reduce((sum, l) => sum + l.estimatedMinutes, 0) / 60 * 10) / 10,
 };
