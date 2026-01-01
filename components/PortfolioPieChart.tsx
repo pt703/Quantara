@@ -2,18 +2,23 @@
 // PORTFOLIO PIE CHART COMPONENT
 // =============================================================================
 // 
-// Displays a visual pie chart of the user's portfolio asset allocation.
+// Displays a proper proportional pie chart of the user's portfolio allocation.
 // Shows the percentage composition of different asset classes like:
-// - Stocks
-// - Real Estate
+// - Stocks (AAPL, GOOGL, etc.)
+// - Cash (savings, money market funds)
 // - Bonds
-// - Cash/High Yield Savings
-// - Other assets
+// - Crypto
+// - ETFs
+// - Real Estate
+// 
+// The pie chart is drawn as a true pizza-pie with segments proportional to
+// the percentage of total portfolio value each asset type represents.
 //
 // =============================================================================
 
 import React, { useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
+import Svg, { Path, Circle, G } from 'react-native-svg';
 import { ThemedText } from './ThemedText';
 import { useTheme } from '@/hooks/useTheme';
 import { Spacing, BorderRadius, Typography } from '@/constants/theme';
@@ -27,29 +32,76 @@ interface PortfolioPieChartProps {
   assets: PortfolioAsset[];
 }
 
-// Color palette for pie chart segments
+interface PieSegment {
+  type: string;
+  value: number;
+  percentage: number;
+  color: string;
+  startAngle: number;
+  endAngle: number;
+}
+
+// Color palette for pie chart segments - matches asset types
 const ASSET_COLORS: Record<string, string> = {
-  stocks: '#3B82F6',      // Blue
-  bonds: '#22C55E',        // Green
-  'real estate': '#F59E0B', // Amber
-  cash: '#8B5CF6',         // Purple
-  crypto: '#EC4899',       // Pink
-  commodities: '#F97316',  // Orange
-  other: '#6B7280',        // Gray
+  stock: '#3B82F6',      // Blue
+  stocks: '#3B82F6',
+  etf: '#8B5CF6',        // Purple
+  crypto: '#F59E0B',     // Amber
+  bond: '#10B981',       // Green
+  bonds: '#10B981',
+  cash: '#6B7280',       // Gray
+  property: '#EC4899',   // Pink
+  'real estate': '#EC4899',
+  other: '#6366F1',      // Indigo
 };
 
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
 
+// Get color for asset type
 function getAssetColor(assetType: string): string {
   const lowerType = assetType.toLowerCase();
-  for (const [key, color] of Object.entries(ASSET_COLORS)) {
-    if (lowerType.includes(key)) {
-      return color;
-    }
-  }
-  return ASSET_COLORS.other;
+  return ASSET_COLORS[lowerType] || ASSET_COLORS.other;
+}
+
+// Format asset type for display
+function formatAssetType(type: string): string {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+// Convert polar coordinates to cartesian
+function polarToCartesian(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  angleInDegrees: number
+): { x: number; y: number } {
+  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0;
+  return {
+    x: centerX + radius * Math.cos(angleInRadians),
+    y: centerY + radius * Math.sin(angleInRadians),
+  };
+}
+
+// Create SVG arc path
+function createArcPath(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  startAngle: number,
+  endAngle: number
+): string {
+  const start = polarToCartesian(centerX, centerY, radius, endAngle);
+  const end = polarToCartesian(centerX, centerY, radius, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+
+  return [
+    'M', centerX, centerY,
+    'L', start.x, start.y,
+    'A', radius, radius, 0, largeArcFlag, 0, end.x, end.y,
+    'Z',
+  ].join(' ');
 }
 
 // =============================================================================
@@ -59,24 +111,39 @@ function getAssetColor(assetType: string): string {
 export function PortfolioPieChart({ assets }: PortfolioPieChartProps) {
   const { theme } = useTheme();
 
-  // Calculate total and percentages
+  // Calculate total portfolio value and create pie segments
   const { total, segments } = useMemo(() => {
-    const totalValue = assets.reduce((sum, asset) => sum + asset.currentValue, 0);
+    // Calculate total value: quantity * currentValue for each asset
+    const totalValue = assets.reduce(
+      (sum, asset) => sum + (asset.quantity * asset.currentValue), 
+      0
+    );
     
-    // Group by asset type and calculate percentages
+    // Group assets by type and sum values
     const grouped = assets.reduce<Record<string, number>>((acc, asset) => {
-      const type = asset.type || 'Other';
-      acc[type] = (acc[type] || 0) + asset.currentValue;
+      const type = asset.type || 'other';
+      const assetValue = asset.quantity * asset.currentValue;
+      acc[type] = (acc[type] || 0) + assetValue;
       return acc;
     }, {});
 
-    const segs = Object.entries(grouped)
-      .map(([type, value]) => ({
-        type,
-        value,
-        percentage: totalValue > 0 ? (value / totalValue) * 100 : 0,
-        color: getAssetColor(type),
-      }))
+    // Create segments with angles for pie chart
+    let currentAngle = 0;
+    const segs: PieSegment[] = Object.entries(grouped)
+      .map(([type, value]) => {
+        const percentage = totalValue > 0 ? (value / totalValue) * 100 : 0;
+        const sweepAngle = (percentage / 100) * 360;
+        const segment: PieSegment = {
+          type,
+          value,
+          percentage,
+          color: getAssetColor(type),
+          startAngle: currentAngle,
+          endAngle: currentAngle + sweepAngle,
+        };
+        currentAngle += sweepAngle;
+        return segment;
+      })
       .sort((a, b) => b.percentage - a.percentage);
 
     return { total: totalValue, segments: segs };
@@ -96,54 +163,67 @@ export function PortfolioPieChart({ assets }: PortfolioPieChartProps) {
     );
   }
 
-  // Calculate pie chart segments as cumulative degrees
-  let cumulativePercentage = 0;
+  // Chart dimensions
+  const size = 120;
+  const center = size / 2;
+  const radius = 50;
+  const innerRadius = 30; // For donut effect
 
   return (
     <View style={styles.container}>
-      {/* Pie Chart Visual */}
+      {/* Chart and Legend Row */}
       <View style={styles.chartRow}>
-        {/* Simple CSS-based pie chart using conic gradient simulation */}
-        <View style={[styles.pieContainer, { backgroundColor: theme.backgroundSecondary }]}>
-          <View style={styles.pieChart}>
-            {segments.map((segment, index) => {
-              const startAngle = (cumulativePercentage / 100) * 360;
-              const endAngle = ((cumulativePercentage + segment.percentage) / 100) * 360;
-              cumulativePercentage += segment.percentage;
-
-              // For React Native, we'll use a simplified bar chart instead
-              return null;
-            })}
-            {/* Center circle for donut effect */}
-            <View style={[styles.pieCenter, { backgroundColor: theme.card }]}>
-              <ThemedText style={styles.totalLabel}>Total</ThemedText>
-              <ThemedText style={styles.totalValue}>
-                £{total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              </ThemedText>
-            </View>
-          </View>
+        {/* SVG Pie Chart */}
+        <View style={styles.chartContainer}>
+          <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            <G>
+              {segments.map((segment, index) => {
+                // Handle case where one segment is 100%
+                if (segment.percentage >= 99.9) {
+                  return (
+                    <Circle
+                      key={segment.type}
+                      cx={center}
+                      cy={center}
+                      r={radius}
+                      fill={segment.color}
+                    />
+                  );
+                }
+                
+                // Skip tiny segments
+                if (segment.percentage < 0.5) return null;
+                
+                return (
+                  <Path
+                    key={segment.type}
+                    d={createArcPath(
+                      center,
+                      center,
+                      radius,
+                      segment.startAngle,
+                      segment.endAngle
+                    )}
+                    fill={segment.color}
+                  />
+                );
+              })}
+              {/* Center circle for donut effect */}
+              <Circle cx={center} cy={center} r={innerRadius} fill={theme.card} />
+            </G>
+          </Svg>
           
-          {/* Simplified bar segments around the pie */}
-          {segments.map((segment, index) => {
-            const rotation = index * (360 / Math.max(segments.length, 1));
-            const width = Math.max(segment.percentage * 3, 8);
-            return (
-              <View
-                key={segment.type}
-                style={[
-                  styles.pieSegmentBar,
-                  {
-                    backgroundColor: segment.color,
-                    width: width,
-                    transform: [
-                      { rotate: `${rotation}deg` },
-                      { translateX: 40 },
-                    ],
-                  },
-                ]}
-              />
-            );
-          })}
+          {/* Center text overlay */}
+          <View style={styles.centerOverlay}>
+            <ThemedText style={[styles.totalLabel, { color: theme.textSecondary }]}>
+              Total
+            </ThemedText>
+            <ThemedText style={styles.totalValue}>
+              £{total >= 1000 
+                ? `${(total / 1000).toFixed(0)}k` 
+                : total.toFixed(0)}
+            </ThemedText>
+          </View>
         </View>
 
         {/* Legend */}
@@ -151,45 +231,15 @@ export function PortfolioPieChart({ assets }: PortfolioPieChartProps) {
           {segments.map((segment) => (
             <View key={segment.type} style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: segment.color }]} />
-              <View style={styles.legendText}>
-                <ThemedText style={styles.legendLabel} numberOfLines={1}>
-                  {segment.type}
-                </ThemedText>
-                <ThemedText style={[styles.legendValue, { color: theme.textSecondary }]}>
-                  {segment.percentage.toFixed(1)}%
-                </ThemedText>
-              </View>
+              <ThemedText style={styles.legendLabel} numberOfLines={1}>
+                {formatAssetType(segment.type)}
+              </ThemedText>
+              <ThemedText style={[styles.legendPercent, { color: theme.textSecondary }]}>
+                {segment.percentage.toFixed(0)}%
+              </ThemedText>
             </View>
           ))}
         </View>
-      </View>
-
-      {/* Horizontal Bar Chart - clearer visualization */}
-      <View style={styles.barChartContainer}>
-        {segments.map((segment) => (
-          <View key={segment.type} style={styles.barRow}>
-            <View style={styles.barLabelContainer}>
-              <View style={[styles.barDot, { backgroundColor: segment.color }]} />
-              <ThemedText style={styles.barLabel} numberOfLines={1}>
-                {segment.type}
-              </ThemedText>
-            </View>
-            <View style={[styles.barTrack, { backgroundColor: theme.backgroundSecondary }]}>
-              <View 
-                style={[
-                  styles.barFill, 
-                  { 
-                    width: `${segment.percentage}%`,
-                    backgroundColor: segment.color,
-                  }
-                ]} 
-              />
-            </View>
-            <ThemedText style={[styles.barPercent, { color: theme.textSecondary }]}>
-              {segment.percentage.toFixed(0)}%
-            </ThemedText>
-          </View>
-        ))}
       </View>
     </View>
   );
@@ -219,36 +269,20 @@ const styles = StyleSheet.create({
   chartRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.lg,
   },
-  pieContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
+  chartContainer: {
+    width: 120,
+    height: 120,
     position: 'relative',
-    overflow: 'hidden',
   },
-  pieChart: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  centerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  pieCenter: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'absolute',
-  },
-  pieSegmentBar: {
-    position: 'absolute',
-    height: 8,
-    borderRadius: 4,
   },
   totalLabel: {
     ...Typography.caption,
@@ -256,7 +290,8 @@ const styles = StyleSheet.create({
   },
   totalValue: {
     ...Typography.headline,
-    fontSize: 12,
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   legend: {
     flex: 1,
@@ -265,66 +300,22 @@ const styles = StyleSheet.create({
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 2,
+    marginVertical: 3,
   },
   legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     marginRight: Spacing.sm,
-  },
-  legendText: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
   legendLabel: {
     ...Typography.caption,
     flex: 1,
   },
-  legendValue: {
+  legendPercent: {
     ...Typography.caption,
+    fontWeight: '600',
     marginLeft: Spacing.sm,
-  },
-  barChartContainer: {
-    width: '100%',
-  },
-  barRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: Spacing.xs,
-  },
-  barLabelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 90,
-  },
-  barDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: Spacing.sm,
-  },
-  barLabel: {
-    ...Typography.caption,
-    flex: 1,
-  },
-  barTrack: {
-    flex: 1,
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: Spacing.sm,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  barPercent: {
-    ...Typography.caption,
-    width: 35,
-    textAlign: 'right',
   },
 });
 

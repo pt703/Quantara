@@ -245,8 +245,9 @@ export default function SubscriptionManagerScreen({ navigation }: SubscriptionMa
               <Pressable
                 style={styles.deleteButton}
                 onPress={() => deleteSubscription(sub.id, sub.name)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Feather name="trash-2" size={18} color={theme.error} />
+                <Feather name="trash-2" size={20} color={theme.error} />
               </Pressable>
             </View>
           ))

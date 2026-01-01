@@ -241,24 +241,22 @@ export default function PortfolioTrackerScreen({ navigation }: PortfolioTrackerS
               ))}
             </View>
 
-            <View style={styles.addRow}>
-              <TextInput
-                style={[styles.addInput, styles.halfInput, { color: theme.text, borderColor: theme.border }]}
-                placeholder="Quantity (e.g., 10)"
-                placeholderTextColor={theme.textSecondary}
-                value={newQuantity}
-                onChangeText={setNewQuantity}
-                keyboardType="decimal-pad"
-              />
-              <TextInput
-                style={[styles.addInput, styles.halfInput, { color: theme.text, borderColor: theme.border }]}
-                placeholder="Value per unit"
-                placeholderTextColor={theme.textSecondary}
-                value={newValue}
-                onChangeText={setNewValue}
-                keyboardType="decimal-pad"
-              />
-            </View>
+            <TextInput
+              style={[styles.addInput, { color: theme.text, borderColor: theme.border }]}
+              placeholder="Quantity (e.g., 10)"
+              placeholderTextColor={theme.textSecondary}
+              value={newQuantity}
+              onChangeText={setNewQuantity}
+              keyboardType="decimal-pad"
+            />
+            <TextInput
+              style={[styles.addInput, { color: theme.text, borderColor: theme.border }]}
+              placeholder="Value per share/unit"
+              placeholderTextColor={theme.textSecondary}
+              value={newValue}
+              onChangeText={setNewValue}
+              keyboardType="decimal-pad"
+            />
             <Pressable
               style={[styles.addConfirmButton, { backgroundColor: theme.primary }]}
               onPress={addAsset}
@@ -312,8 +310,9 @@ export default function PortfolioTrackerScreen({ navigation }: PortfolioTrackerS
                       <Pressable
                         style={styles.deleteButton}
                         onPress={() => deleteAsset(asset.id, asset.name)}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                       >
-                        <Feather name="trash-2" size={16} color={theme.error} />
+                        <Feather name="trash-2" size={18} color={theme.error} />
                       </Pressable>
                     </View>
                   </View>
