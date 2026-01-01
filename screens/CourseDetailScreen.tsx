@@ -261,6 +261,7 @@ export default function CourseDetailScreen({ navigation, route }: CourseDetailSc
     const targetModule = modules[targetModuleIndex];
     
     // Navigate to appropriate screen based on module type
+    // Pass allModules so user can navigate to next module with Next button
     if (targetModule.type === 'reading') {
       navigation.navigate('ReadingModule', {
         moduleId: targetModule.id,
@@ -269,6 +270,7 @@ export default function CourseDetailScreen({ navigation, route }: CourseDetailSc
         moduleIndex: targetModuleIndex,
         totalModules: totalModules,
         module: targetModule as any,
+        allModules: modules as any,
       });
     } else if (targetModule.type === 'quiz') {
       navigation.navigate('QuizModule', {
@@ -278,6 +280,7 @@ export default function CourseDetailScreen({ navigation, route }: CourseDetailSc
         moduleIndex: targetModuleIndex,
         totalModules: totalModules,
         module: targetModule as any,
+        allModules: modules as any,
       });
     }
   }, [navigation, courseId, moduleProgress]);

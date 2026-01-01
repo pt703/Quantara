@@ -35,6 +35,13 @@ import {
 // =============================================================================
 // Converts legacy lesson content/questions to the new Coursera-style modules.
 // Each lesson gets 4 modules: 3 reading + 1 quiz
+// 
+// Content blocks support these types:
+// - text: Regular paragraphs
+// - highlight: Key points (yellow/primary accent)
+// - tip: Pro tips (green accent)
+// - warning: Important notes (red accent)
+// - example: Practical examples (gray background)
 
 function generateModulesForLesson(lesson: {
   id: string;
@@ -50,62 +57,124 @@ function generateModulesForLesson(lesson: {
   const mainSection = contentSections[0] || '';
   const subSections = contentSections.slice(1);
   
+  // Extract title from main section
+  const mainContent = mainSection.replace(/^#\s+.*\n+/, '').trim();
+  
   // Reading Module 1: Introduction
+  // Sets the stage with overview and why this topic matters
+  const introBlocks: ContentBlock[] = [
+    {
+      type: 'text',
+      content: mainContent || `Welcome to this lesson on ${lesson.title}. Let's explore the key concepts that will help you master this topic.`,
+      animationPreset: 'fade_in',
+    },
+  ];
+  
+  // Add a highlight block if there's a first subsection
+  if (subSections[0]) {
+    const firstSub = subSections[0].split('\n').filter(l => l.trim());
+    introBlocks.push({
+      type: 'highlight',
+      content: firstSub.slice(1).join('\n\n') || firstSub[0],
+      animationPreset: 'slide_up',
+    });
+  }
+  
   modules.push({
     id: `${lesson.id}-mod-1`,
     type: 'reading',
     title: 'Introduction',
-    estimatedMinutes: 2,
-    xpReward: 5,
-    contentBlocks: [
-      {
-        type: 'text',
-        content: mainSection.replace(/^#\s+.*\n/, ''),
-        animationPreset: 'fade_in',
-      },
-    ],
+    estimatedMinutes: 3,
+    xpReward: 10,
+    contentBlocks: introBlocks,
     conceptTags: [`${lesson.id}-intro`],
   } as ReadingModule);
   
   // Reading Module 2: Key Concepts
+  // Core knowledge with highlights and tips
+  const conceptBlocks: ContentBlock[] = [];
+  
+  subSections.slice(1, 3).forEach((section, idx) => {
+    const lines = section.split('\n').filter(l => l.trim());
+    const title = lines[0] || '';
+    const body = lines.slice(1).join('\n\n');
+    
+    conceptBlocks.push({
+      type: idx === 0 ? 'highlight' : 'tip',
+      content: `${title}\n\n${body}`,
+      animationPreset: idx === 0 ? 'slide_up' : 'fade_in',
+    });
+  });
+  
+  // Add a practical tip if we have limited content
+  if (conceptBlocks.length < 2) {
+    conceptBlocks.push({
+      type: 'tip',
+      content: `Remember: Understanding ${lesson.title.toLowerCase()} is essential for building strong financial habits. Take your time with this material.`,
+      animationPreset: 'fade_in',
+    });
+  }
+  
   modules.push({
     id: `${lesson.id}-mod-2`,
     type: 'reading',
     title: 'Key Concepts',
-    estimatedMinutes: 2,
-    xpReward: 5,
-    contentBlocks: subSections.slice(0, Math.ceil(subSections.length / 2)).map(section => ({
-      type: 'highlight' as const,
-      content: `## ${section}`,
-      animationPreset: 'slide_up' as const,
-    })),
+    estimatedMinutes: 3,
+    xpReward: 10,
+    contentBlocks: conceptBlocks,
     conceptTags: [`${lesson.id}-concepts`],
   } as ReadingModule);
   
-  // Reading Module 3: Deep Dive
+  // Reading Module 3: Practical Application
+  // Examples and real-world application
+  const practicalBlocks: ContentBlock[] = [];
+  
+  subSections.slice(3).forEach((section, idx) => {
+    const lines = section.split('\n').filter(l => l.trim());
+    const title = lines[0] || '';
+    const body = lines.slice(1).join('\n\n');
+    
+    practicalBlocks.push({
+      type: 'example',
+      content: `${title}\n\n${body}`,
+      animationPreset: 'scale_in',
+    });
+  });
+  
+  // Add practical summary
+  practicalBlocks.push({
+    type: 'text',
+    content: `Now that you understand the core concepts of ${lesson.title.toLowerCase()}, you're ready to test your knowledge with a quiz!`,
+    animationPreset: 'fade_in',
+  });
+  
+  // Add important reminder
+  practicalBlocks.push({
+    type: 'warning',
+    content: `Before moving on, make sure you understand all the key points. The quiz will test your comprehension of this material.`,
+    animationPreset: 'fade_in',
+  });
+  
   modules.push({
     id: `${lesson.id}-mod-3`,
     type: 'reading',
-    title: 'Deep Dive',
-    estimatedMinutes: 2,
-    xpReward: 5,
-    contentBlocks: subSections.slice(Math.ceil(subSections.length / 2)).map(section => ({
-      type: 'example' as const,
-      content: `## ${section}`,
-      animationPreset: 'scale_in' as const,
-    })),
-    conceptTags: [`${lesson.id}-deep`],
+    title: 'Practical Application',
+    estimatedMinutes: 3,
+    xpReward: 10,
+    contentBlocks: practicalBlocks,
+    conceptTags: [`${lesson.id}-practical`],
   } as ReadingModule);
   
   // Quiz Module: Test understanding
+  // 80% mastery required to pass
   modules.push({
     id: `${lesson.id}-quiz`,
     type: 'quiz',
     title: `Quiz: ${lesson.title}`,
-    estimatedMinutes: 3,
-    xpReward: 25,
+    estimatedMinutes: 5,
+    xpReward: 30,
     questions: lesson.questions,
-    masteryThreshold: 0.8, // 80% to pass
+    masteryThreshold: 0.8,
     conceptTags: lesson.questions.map(q => q.id),
   } as QuizModule);
   

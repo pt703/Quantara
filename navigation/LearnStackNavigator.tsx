@@ -35,6 +35,7 @@ export type LearnStackParamList = {
   // Skill assessment
   TestYourSkill: undefined;
   // New module screens for Coursera-style structure
+  // allModules array allows navigation to next module without going back
   ReadingModule: { 
     moduleId: string; 
     lessonId: string; 
@@ -42,6 +43,7 @@ export type LearnStackParamList = {
     moduleIndex: number; 
     totalModules: number;
     module: ReadingModule;
+    allModules: (ReadingModule | QuizModule)[];
   };
   QuizModule: { 
     moduleId: string; 
@@ -50,6 +52,7 @@ export type LearnStackParamList = {
     moduleIndex: number; 
     totalModules: number;
     module: QuizModule;
+    allModules: (ReadingModule | QuizModule)[];
   };
 };
 
