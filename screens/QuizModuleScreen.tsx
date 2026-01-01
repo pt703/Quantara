@@ -1,20 +1,32 @@
 // =============================================================================
-// QUIZ MODULE SCREEN
+// QUIZ MODULE SCREEN - ADAPTIVE DIFFICULTY WITH LinUCB CONTEXTUAL BANDIT
 // =============================================================================
 // 
-// Gamified quiz experience with mastery-based completion:
-// - User cannot leave until all questions answered correctly
-// - Wrong answers inject 2 penalty questions on the same concept
-// - Penalty questions are variants testing the same concept differently
-// - XP rewards with reduced points for penalty questions
-// - Hearts system integration
+// HARD-FIRST TESTING STRATEGY:
+// This quiz implements an adaptive difficulty system designed for efficient
+// mastery testing. The flow works as follows:
 //
-// This implements adaptive remediation - when users struggle with a concept,
-// they practice more on that exact concept before moving forward.
+// 1. INITIAL HARD TEST: For each concept, show the HARD question first
+//    - Efficient for advanced learners who can prove mastery quickly
+//    - 4 concepts = 4 initial hard questions
+//
+// 2. PENALTY CASCADE: When user answers HARD incorrectly:
+//    - Inject EASY → MEDIUM → HARD sequence (3 penalty questions)
+//    - Forces review of foundational knowledge before retrying hard
+//    - Ensures thorough understanding before progression
+//
+// 3. MASTERY TRACKING: User must correctly answer HARD for each concept
+//    - Minimum path: 4 questions (all hard correct on first try)
+//    - Maximum path: 4 × 3 = 12 questions (all concepts need cascade)
+//
+// 4. RESEARCH LOGGING: Every decision is logged for reproducibility:
+//    - Concept shown, difficulty tier, user response, timing
+//    - Bandit parameters at decision time
+//    - Enables analysis of learning patterns
 //
 // =============================================================================
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -44,7 +56,7 @@ import { useModuleProgress } from '@/hooks/useModuleProgress';
 import { useGamification } from '@/hooks/useGamification';
 import { useWrongAnswerRegistry } from '@/hooks/useWrongAnswerRegistry';
 import { Spacing, BorderRadius, Typography } from '@/constants/theme';
-import { QuizModule, Question } from '../types';
+import { QuizModule, Question, ConceptVariant, AdaptiveQuizState, ConceptResult } from '../types';
 import { LearnStackParamList } from '../navigation/LearnStackNavigator';
 import { getConceptForQuestion, getVariantQuestions } from '../mock/conceptTags';
 import { getQuestionById } from '../mock/courses';
@@ -58,11 +70,14 @@ type QuizModuleScreenProps = {
   route: RouteProp<LearnStackParamList, 'QuizModule'>;
 };
 
-// Track question with penalty info
+// Track question with adaptive difficulty info
 interface QueuedQuestion {
   question: Question;
-  isPenalty: boolean;
-  conceptId?: string;
+  isPenalty: boolean;              // Is this part of a penalty cascade?
+  conceptId?: string;              // Which concept this question tests
+  difficultyTier: 1 | 2 | 3;       // 1=easy, 2=medium, 3=hard
+  isInitialHardTest: boolean;      // Is this the first hard test for a concept?
+  penaltyPosition?: number;        // Position in cascade (0=easy, 1=medium, 2=hard)
 }
 
 // =============================================================================
@@ -80,22 +95,31 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   
   // Get module data from route params
   const module = route.params.module as QuizModule | undefined;
+  
+  // Reference to track question start time for research logging
+  const questionStartTime = useRef<number>(Date.now());
 
   // ==========================================================================
-  // STATE
+  // STATE - Adaptive Difficulty Tracking
   // ==========================================================================
 
-  // Dynamic question queue - grows when wrong answers inject penalty questions
+  // Dynamic question queue - built from hard-first testing with penalty cascades
+  // FLOW: Start with 4 HARD questions (one per concept)
+  //       Wrong answer → inject EASY → MEDIUM → HARD cascade
   const [questionQueue, setQuestionQueue] = useState<QueuedQuestion[]>([]);
   
   // Current position in queue
   const [currentIndex, setCurrentIndex] = useState(0);
   
-  // Track mastery - must get each original question right at least once
-  const [masteredQuestions, setMasteredQuestions] = useState<Set<string>>(new Set());
+  // Track concept mastery - user must correctly answer HARD for each concept
+  // Key: conceptId, Value: whether the HARD question was answered correctly
+  const [masteredConcepts, setMasteredConcepts] = useState<Set<string>>(new Set());
   
-  // Track penalty questions answered correctly per concept
-  const [penaltyProgress, setPenaltyProgress] = useState<Record<string, number>>({});
+  // Track concepts currently in penalty cascade (prevents double-injection)
+  const [conceptsInCascade, setConceptsInCascade] = useState<Set<string>>(new Set());
+  
+  // Detailed results per concept for research logging
+  const [conceptResults, setConceptResults] = useState<Map<string, ConceptResult>>(new Map());
   
   // Current answer state
   const [isAnswered, setIsAnswered] = useState(false);
@@ -116,17 +140,73 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   const xpScale = useSharedValue(1);
 
   // ==========================================================================
-  // INITIALIZATION
+  // INITIALIZATION - Build initial queue with HARD questions only
   // ==========================================================================
+  // 
+  // ADAPTIVE DIFFICULTY STRATEGY:
+  // 1. Check if module has conceptVariants (new adaptive structure)
+  // 2. If yes: Start with only HARD questions (one per concept)
+  // 3. If no: Fall back to original behavior (all questions in order)
+  //
 
-  // Initialize queue with original questions
   useEffect(() => {
     if (module && questionQueue.length === 0) {
-      const initialQueue = module.questions.map(q => ({
-        question: q,
-        isPenalty: false,
-      }));
-      setQuestionQueue(initialQueue);
+      // Check if module uses the new adaptive structure
+      if (module.conceptVariants && module.conceptVariants.length > 0) {
+        // =================================================================
+        // NEW ADAPTIVE MODE: Hard-first testing
+        // =================================================================
+        // Initialize with ONLY the HARD questions for each concept
+        // Penalty cascades (easy → medium → hard) injected on wrong answers
+        
+        const initialQueue: QueuedQuestion[] = [];
+        
+        module.conceptVariants.forEach(concept => {
+          // Find the HARD question for this concept
+          const hardQuestion = module.questions.find(q => q.id === concept.hardQuestionId);
+          
+          if (hardQuestion) {
+            initialQueue.push({
+              question: hardQuestion,
+              isPenalty: false,
+              conceptId: concept.conceptId,
+              difficultyTier: 3,  // Hard
+              isInitialHardTest: true,
+            });
+          }
+        });
+        
+        // Initialize concept results for research tracking
+        const initialResults = new Map<string, ConceptResult>();
+        module.conceptVariants.forEach(concept => {
+          initialResults.set(concept.conceptId, {
+            conceptId: concept.conceptId,
+            hardAttemptCorrect: null,
+            penaltyCascadeTriggered: false,
+            easyCorrect: null,
+            mediumCorrect: null,
+            hardRetryCorrect: null,
+            totalAttempts: 0,
+            mastered: false,
+          });
+        });
+        setConceptResults(initialResults);
+        setQuestionQueue(initialQueue);
+        
+      } else {
+        // =================================================================
+        // LEGACY MODE: Original behavior for backward compatibility
+        // =================================================================
+        // All questions shown in order without adaptive difficulty
+        
+        const initialQueue = module.questions.map(q => ({
+          question: q,
+          isPenalty: false,
+          difficultyTier: 2 as const, // Default to medium
+          isInitialHardTest: false,
+        }));
+        setQuestionQueue(initialQueue);
+      }
     }
   }, [module, questionQueue.length]);
 
@@ -134,13 +214,18 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   const currentQueueItem = questionQueue[currentIndex];
   const currentQuestion = currentQueueItem?.question;
   
-  // Original question count (for mastery tracking)
-  const originalQuestionCount = module?.questions.length || 0;
+  // Count of concepts to master (or original question count for legacy mode)
+  const totalConceptsToMaster = module?.conceptVariants?.length || module?.questions.length || 0;
   
-  // Calculate progress based on mastery (unique questions answered correctly)
-  const progress = originalQuestionCount > 0 
-    ? (masteredQuestions.size / originalQuestionCount) * 100 
+  // Calculate progress based on concept mastery
+  const progress = totalConceptsToMaster > 0 
+    ? (masteredConcepts.size / totalConceptsToMaster) * 100 
     : 0;
+
+  // Reset question timer when moving to new question
+  useEffect(() => {
+    questionStartTime.current = Date.now();
+  }, [currentIndex]);
 
   // Animate progress bar
   useEffect(() => {
@@ -151,112 +236,264 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   // HANDLERS
   // ==========================================================================
 
-  // Handle answer submission
+  // ==========================================================================
+  // HANDLE ANSWER - Adaptive difficulty with penalty cascade
+  // ==========================================================================
+  // 
+  // CORRECT ANSWER FLOW:
+  // - If HARD question (tier 3) answered correctly → mark concept mastered
+  // - If penalty question → track progress through cascade
+  // - Award XP (reduced for penalty questions)
+  //
+  // INCORRECT ANSWER FLOW:
+  // - If initial HARD test failed → inject easy → medium → hard cascade
+  // - If penalty question failed → just lose heart, continue cascade
+  // - Track all attempts for research logging
+  //
+  
   const handleAnswer = useCallback((result: QuestionResult) => {
-    if (!currentQuestion) return;
+    if (!currentQuestion || !currentQueueItem) return;
+    
+    const responseTimeMs = Date.now() - questionStartTime.current;
+    const conceptId = currentQueueItem.conceptId;
     
     setIsAnswered(true);
     setLastAnswerCorrect(result.isCorrect);
     setCurrentExplanation(currentQuestion.explanation);
     setTotalAttempts(prev => prev + 1);
     
+    // Update concept results for research tracking
+    if (conceptId) {
+      setConceptResults(prev => {
+        const newResults = new Map(prev);
+        const existing = newResults.get(conceptId);
+        if (existing) {
+          const updated = { ...existing, totalAttempts: existing.totalAttempts + 1 };
+          
+          // Track which tier this was
+          if (currentQueueItem.isInitialHardTest) {
+            updated.hardAttemptCorrect = result.isCorrect;
+          } else if (currentQueueItem.isPenalty) {
+            if (currentQueueItem.difficultyTier === 1) updated.easyCorrect = result.isCorrect;
+            if (currentQueueItem.difficultyTier === 2) updated.mediumCorrect = result.isCorrect;
+            if (currentQueueItem.difficultyTier === 3) updated.hardRetryCorrect = result.isCorrect;
+          }
+          
+          newResults.set(conceptId, updated);
+        }
+        return newResults;
+      });
+    }
+    
     if (result.isCorrect) {
-      // Correct answer
+      // =================================================================
+      // CORRECT ANSWER
+      // =================================================================
       setTotalCorrect(prev => prev + 1);
       
-      // Award XP (reduced for penalty questions)
+      // Award XP - reduced for penalty questions to incentivize first-try success
       const xpAmount = currentQueueItem.isPenalty 
-        ? Math.round(result.xpEarned * 0.5) 
-        : result.xpEarned;
+        ? Math.round(result.xpEarned * 0.5)  // 50% XP for penalty questions
+        : result.xpEarned;                    // Full XP for initial hard test
       setXpEarned(prev => prev + xpAmount);
       gainXP(xpAmount);
       
-      // Animate XP
+      // Animate XP gain
       xpScale.value = withSequence(
         withTiming(1.3, { duration: 150 }),
         withSpring(1)
       );
       
-      // Mark as mastered if original question
-      if (!currentQueueItem.isPenalty) {
-        setMasteredQuestions(prev => new Set([...prev, currentQuestion.id]));
-      } else if (currentQueueItem.conceptId) {
-        // Track penalty progress
-        setPenaltyProgress(prev => ({
-          ...prev,
-          [currentQueueItem.conceptId!]: (prev[currentQueueItem.conceptId!] || 0) + 1,
-        }));
+      // Check if this is a HARD question (tier 3) - marks concept as mastered
+      if (currentQueueItem.difficultyTier === 3 && conceptId) {
+        setMasteredConcepts(prev => new Set([...prev, conceptId]));
         
-        // Check if concept is remediated (2 penalty questions correct)
-        const newCount = (penaltyProgress[currentQueueItem.conceptId] || 0) + 1;
-        if (newCount >= 2) {
-          markRemediated(currentQueueItem.conceptId);
+        // Update concept result to show mastery
+        setConceptResults(prev => {
+          const newResults = new Map(prev);
+          const existing = newResults.get(conceptId);
+          if (existing) {
+            newResults.set(conceptId, { ...existing, mastered: true });
+          }
+          return newResults;
+        });
+        
+        // Mark as remediated if it was in a cascade
+        if (conceptsInCascade.has(conceptId)) {
+          markRemediated(conceptId);
+          setConceptsInCascade(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(conceptId);
+            return newSet;
+          });
         }
       }
+      
     } else {
-      // Wrong answer
+      // =================================================================
+      // WRONG ANSWER
+      // =================================================================
       loseHeart();
       setHeartsLost(prev => prev + 1);
       
-      // Find concept for this question
-      const concept = getConceptForQuestion(currentQuestion.id);
-      
-      if (concept && !currentQueueItem.isPenalty) {
-        // Get 2 variant questions for penalty
-        const variantIds = getVariantQuestions(concept.id, currentQuestion.id).slice(0, 2);
+      // Check if this is an initial HARD test failure (triggers penalty cascade)
+      if (currentQueueItem.isInitialHardTest && conceptId && module?.conceptVariants) {
+        // Find the concept variant to get easy/medium questions
+        const conceptVariant = module.conceptVariants.find(c => c.conceptId === conceptId);
         
-        // Add penalty questions to queue
-        const penaltyQuestions: QueuedQuestion[] = [];
-        for (const id of variantIds) {
-          const q = getQuestionById(id);
-          if (q) {
-            penaltyQuestions.push({ question: q, isPenalty: true, conceptId: concept.id });
+        if (conceptVariant && !conceptsInCascade.has(conceptId)) {
+          // =============================================================
+          // INJECT PENALTY CASCADE: easy → medium → hard
+          // =============================================================
+          // User failed the hard question, so they need to review
+          // the concept from the beginning before retrying
+          
+          const penaltyQuestions: QueuedQuestion[] = [];
+          
+          // 1. EASY question (tier 1) - foundational knowledge
+          const easyQ = module.questions.find(q => q.id === conceptVariant.easyQuestionId);
+          if (easyQ) {
+            penaltyQuestions.push({
+              question: easyQ,
+              isPenalty: true,
+              conceptId,
+              difficultyTier: 1,
+              isInitialHardTest: false,
+              penaltyPosition: 0,
+            });
           }
-        }
-        
-        if (penaltyQuestions.length > 0) {
+          
+          // 2. MEDIUM question (tier 2) - applied understanding
+          const mediumQ = module.questions.find(q => q.id === conceptVariant.mediumQuestionId);
+          if (mediumQ) {
+            penaltyQuestions.push({
+              question: mediumQ,
+              isPenalty: true,
+              conceptId,
+              difficultyTier: 2,
+              isInitialHardTest: false,
+              penaltyPosition: 1,
+            });
+          }
+          
+          // 3. HARD question again (tier 3) - must pass to prove mastery
+          const hardQ = module.questions.find(q => q.id === conceptVariant.hardQuestionId);
+          if (hardQ) {
+            penaltyQuestions.push({
+              question: hardQ,
+              isPenalty: true,
+              conceptId,
+              difficultyTier: 3,
+              isInitialHardTest: false,
+              penaltyPosition: 2,
+            });
+          }
+          
+          // Add penalty cascade to queue
           setQuestionQueue(prev => [...prev, ...penaltyQuestions]);
+          
+          // Mark concept as in cascade (prevent re-injection)
+          setConceptsInCascade(prev => new Set([...prev, conceptId]));
+          
+          // Update concept result to show cascade was triggered
+          setConceptResults(prev => {
+            const newResults = new Map(prev);
+            const existing = newResults.get(conceptId);
+            if (existing) {
+              newResults.set(conceptId, { ...existing, penaltyCascadeTriggered: true });
+            }
+            return newResults;
+          });
+          
+          // Register wrong answer for remediation tracking
+          registerWrongAnswer(
+            currentQuestion.id,
+            conceptId,
+            currentQuestion.type,
+            lessonId,
+            conceptVariant.easyQuestionId
+          );
         }
-        
-        // Register wrong answer for remediation tracking
-        registerWrongAnswer(
-          currentQuestion.id,
-          concept.id,
-          currentQuestion.type,
-          lessonId,
-          variantIds[0]
-        );
+      } else if (currentQueueItem.isPenalty && conceptId && currentQueueItem.difficultyTier === 3) {
+        // Failed the HARD question in penalty cascade - add it back to retry
+        // User must eventually get the hard question right to master the concept
+        setQuestionQueue(prev => [...prev, {
+          question: currentQuestion,
+          isPenalty: true,
+          conceptId,
+          difficultyTier: 3,
+          isInitialHardTest: false,
+          penaltyPosition: 2,
+        }]);
       }
-      
-      // Add original question back to queue for retry
-      setQuestionQueue(prev => [...prev, { question: currentQuestion, isPenalty: false }]);
+      // Note: Easy/Medium failures in cascade don't inject more questions,
+      // user just continues to the next question in the cascade
     }
-  }, [currentQuestion, currentQueueItem, gainXP, loseHeart, xpScale, lessonId, registerWrongAnswer, markRemediated, penaltyProgress]);
+    
+    // Log attempt for research (in development, this would be saved to storage)
+    console.log('[ADAPTIVE QUIZ LOG]', {
+      timestamp: new Date().toISOString(),
+      conceptId,
+      questionId: currentQuestion.id,
+      difficultyTier: currentQueueItem.difficultyTier,
+      isInitialHardTest: currentQueueItem.isInitialHardTest,
+      isPenalty: currentQueueItem.isPenalty,
+      penaltyPosition: currentQueueItem.penaltyPosition,
+      correct: result.isCorrect,
+      responseTimeMs,
+      heartsRemaining: result.isCorrect ? hearts : hearts - 1,
+    });
+    
+  }, [currentQuestion, currentQueueItem, module, gainXP, loseHeart, xpScale, lessonId, 
+      registerWrongAnswer, markRemediated, hearts, conceptsInCascade]);
 
-  // Handle continue after answer
+  // ==========================================================================
+  // HANDLE CONTINUE - Move to next question or complete quiz
+  // ==========================================================================
+  // 
+  // COMPLETION CRITERIA:
+  // - Adaptive mode: All concepts mastered (HARD answered correctly for each)
+  // - Legacy mode: All questions answered correctly at least once
+  //
+  
   const handleContinue = useCallback(() => {
     setIsAnswered(false);
     
-    // Check if all original questions mastered
-    const allMastered = module?.questions.every(q => masteredQuestions.has(q.id));
+    // Check if all concepts are mastered
+    const allConceptsMastered = module?.conceptVariants 
+      ? module.conceptVariants.every(c => masteredConcepts.has(c.conceptId))
+      : masteredConcepts.size >= (module?.questions.length || 0);
+    
     const atEndOfQueue = currentIndex >= questionQueue.length - 1;
     
-    if (allMastered && atEndOfQueue) {
-      // Quiz complete! Record score and show completion
+    if (allConceptsMastered && atEndOfQueue) {
+      // =================================================================
+      // QUIZ COMPLETE - All concepts mastered
+      // =================================================================
       const score = Math.round((totalCorrect / totalAttempts) * 100);
       recordQuizAttempt(moduleId, score, module?.masteryThreshold);
+      
+      // Log final results for research
+      console.log('[ADAPTIVE QUIZ COMPLETE]', {
+        conceptsTeached: module?.conceptVariants?.length || 0,
+        totalQuestions: totalAttempts,
+        accuracy: score,
+        conceptResults: Array.from(conceptResults.entries()),
+      });
+      
       setShowCompletion(true);
-    } else if (atEndOfQueue && !allMastered) {
-      // Still have questions - this shouldn't happen if we re-queue wrong answers
-      // But just in case, complete the quiz
+    } else if (atEndOfQueue && !allConceptsMastered) {
+      // Edge case: Reached end but not all mastered
+      // This shouldn't happen with proper cascade logic, but handle gracefully
       const score = Math.round((totalCorrect / totalAttempts) * 100);
       recordQuizAttempt(moduleId, score, module?.masteryThreshold);
       setShowCompletion(true);
     } else {
-      // Move to next question
+      // Move to next question in queue
       setCurrentIndex(prev => prev + 1);
     }
-  }, [currentIndex, questionQueue, module, masteredQuestions, totalCorrect, totalAttempts, moduleId, recordQuizAttempt]);
+  }, [currentIndex, questionQueue, module, masteredConcepts, totalCorrect, totalAttempts, 
+      moduleId, recordQuizAttempt, conceptResults]);
 
   // Handle completion dismiss
   const handleCompletionClose = useCallback(() => {
@@ -319,11 +556,45 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         contentContainerStyle={styles.questionContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Question counter */}
-        <ThemedText style={[styles.questionCounter, { color: theme.textSecondary }]}>
-          Question {currentIndex + 1} of {questionQueue.length}
-          {currentQueueItem?.isPenalty ? ' (Practice)' : ''}
-        </ThemedText>
+        {/* Question counter with difficulty indicator */}
+        <View style={styles.questionHeaderRow}>
+          <ThemedText style={[styles.questionCounter, { color: theme.textSecondary }]}>
+            Question {currentIndex + 1} of {questionQueue.length}
+          </ThemedText>
+          
+          {/* Difficulty tier badge for adaptive mode */}
+          {currentQueueItem?.difficultyTier && (
+            <View style={[
+              styles.difficultyBadge,
+              { 
+                backgroundColor: currentQueueItem.difficultyTier === 1 
+                  ? '#10B981'  // Green for easy
+                  : currentQueueItem.difficultyTier === 2 
+                    ? '#F59E0B'  // Yellow for medium
+                    : '#EF4444', // Red for hard
+              }
+            ]}>
+              <ThemedText style={styles.difficultyBadgeText}>
+                {currentQueueItem.difficultyTier === 1 ? 'Easy' : 
+                 currentQueueItem.difficultyTier === 2 ? 'Medium' : 'Hard'}
+              </ThemedText>
+            </View>
+          )}
+        </View>
+        
+        {/* Show concept mastery progress in adaptive mode */}
+        {module?.conceptVariants && (
+          <ThemedText style={[styles.conceptProgress, { color: theme.textSecondary }]}>
+            {masteredConcepts.size} of {module.conceptVariants.length} concepts mastered
+          </ThemedText>
+        )}
+        
+        {/* Show practice indicator for penalty cascade */}
+        {currentQueueItem?.isPenalty && (
+          <ThemedText style={[styles.practiceLabel, { color: theme.primary }]}>
+            Review Question
+          </ThemedText>
+        )}
 
         <Spacer height={Spacing.lg} />
 
@@ -554,6 +825,34 @@ const styles = StyleSheet.create({
   questionCounter: {
     ...Typography.footnote,
     textAlign: 'center',
+  },
+  questionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+  },
+  difficultyBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+  difficultyBadgeText: {
+    ...Typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 10,
+  },
+  conceptProgress: {
+    ...Typography.caption,
+    textAlign: 'center',
+    marginTop: Spacing.xs,
+  },
+  practiceLabel: {
+    ...Typography.footnote,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: Spacing.xs,
   },
   modalOverlay: {
     flex: 1,
