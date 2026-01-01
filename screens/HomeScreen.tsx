@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { View, StyleSheet, Pressable, ScrollView } from "react-native";
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -14,8 +14,16 @@ import { useLearningProgress } from "@/hooks/useLearningProgress";
 import { modules } from "../mock/modules";
 import { recommendations } from "../mock/recommendations";
 
+type RootTabParamList = {
+  HomeTab: undefined;
+  LearnTab: { screen: string; params: object };
+  ChallengesTab: { screen: string; params: object };
+  SocialTab: undefined;
+  ProfileTab: undefined;
+};
+
 export default function HomeScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<RootTabParamList>>();
   const { theme } = useTheme();
   const { profile, financial } = useUserData();
   const { getLessonStatus } = useLearningProgress();
@@ -47,16 +55,18 @@ export default function HomeScreen() {
     if (rec.kind === 'lesson') {
       const module = modules.find(m => m.lessons.some(l => l.id === rec.linkedId));
       if (module) {
-        navigation.navigate('LearnTab' as never, {
+        // @ts-ignore - nested navigation typing is complex
+        navigation.navigate('LearnTab', {
           screen: 'Lesson',
           params: { lessonId: rec.linkedId, moduleId: module.id },
-        } as never);
+        });
       }
     } else if (rec.kind === 'challenge') {
-      navigation.navigate('ChallengesTab' as never, {
+      // @ts-ignore - nested navigation typing is complex
+      navigation.navigate('ChallengesTab', {
         screen: 'ChallengeDetail',
         params: { challengeId: rec.linkedId },
-      } as never);
+      });
     }
   };
 
@@ -135,15 +145,16 @@ export default function HomeScreen() {
 
             <Pressable
               style={[styles.primaryButton, { backgroundColor: theme.primary }]}
-              onPress={() =>
-                navigation.navigate('LearnTab' as never, {
+              onPress={() => {
+                // @ts-ignore - nested navigation typing is complex
+                navigation.navigate('LearnTab', {
                   screen: 'Lesson',
                   params: {
                     lessonId: continueLesson.lesson.id,
                     moduleId: continueLesson.module.id,
                   },
-                } as never)
-              }
+                });
+              }}
             >
               <ThemedText style={[styles.primaryButtonText, { color: theme.buttonText }]}>
                 Resume

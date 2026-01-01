@@ -76,6 +76,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
   const { 
     hearts, 
     loseHeart, 
+    earnHeart,
     gainXP, 
     recordLessonComplete,
     streak,
@@ -235,6 +236,42 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
   }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale, isRepeatQuestion, attemptedQuestions]);
 
   /**
+   * Called when all questions are answered and mastered.
+   * MUST be defined before handleContinue since it's called from there.
+   */
+  const handleLessonComplete = useCallback(() => {
+    if (!lesson || !course) return;
+
+    // Calculate final stats
+    const timeSpent = Math.round((Date.now() - startTime) / 1000);
+    // Perfect score = mastered all questions on first try (no repeats needed)
+    const isPerfect = questionQueue.length === originalQuestionCount;
+
+    // Award completion XP
+    const completionBonus = Math.round(lesson.xpReward * 0.5);
+    const totalXP = gainXP(xpEarned + completionBonus);
+    
+    // Award heart for completing the lesson
+    // Users EARN hearts by finishing lessons, not by default
+    earnHeart();
+
+    // Record for adaptive learning
+    recordLessonAttempt(
+      lessonId,
+      accuracy,
+      timeSpent,
+      true,  // completed
+      true   // was recommended (we can enhance this later)
+    );
+
+    // Record for achievements
+    recordLessonComplete(isPerfect);
+
+    // Show completion modal
+    setShowCompletion(true);
+  }, [lesson, course, startTime, originalQuestionCount, questionQueue.length, xpEarned, gainXP, earnHeart, recordLessonAttempt, recordLessonComplete, lessonId, accuracy]);
+
+  /**
    * Called when user closes explanation and moves to next question.
    * Duolingo-style: lesson completes only when all unique questions are mastered.
    */
@@ -270,37 +307,6 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
       }
     }
   }, [currentQuestionIndex, questionQueue, originalQuestions, questionMastery, attemptedQuestions, handleLessonComplete]);
-
-  /**
-   * Called when all questions are answered and mastered.
-   */
-  const handleLessonComplete = useCallback(() => {
-    if (!lesson || !course) return;
-
-    // Calculate final stats
-    const timeSpent = Math.round((Date.now() - startTime) / 1000);
-    // Perfect score = mastered all questions on first try (no repeats needed)
-    const isPerfect = questionQueue.length === originalQuestionCount;
-
-    // Award completion XP
-    const completionBonus = Math.round(lesson.xpReward * 0.5);
-    const totalXP = gainXP(xpEarned + completionBonus);
-
-    // Record for adaptive learning
-    recordLessonAttempt(
-      lessonId,
-      accuracy,
-      timeSpent,
-      true,  // completed
-      true   // was recommended (we can enhance this later)
-    );
-
-    // Record for achievements
-    recordLessonComplete(isPerfect);
-
-    // Show completion modal
-    setShowCompletion(true);
-  }, [lesson, course, startTime, originalQuestionCount, questionQueue.length, xpEarned, gainXP, recordLessonAttempt, recordLessonComplete, lessonId, accuracy]);
 
   /**
    * Called when user wants to exit the lesson early.
@@ -388,29 +394,10 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     );
   }
 
-  // No hearts left
-  if (hearts <= 0) {
-    return (
-      <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.noHeartsContainer}>
-          <Feather name="heart" size={64} color="#EF4444" />
-          <Spacer height={Spacing.lg} />
-          <ThemedText style={styles.noHeartsTitle}>Out of Hearts!</ThemedText>
-          <Spacer height={Spacing.sm} />
-          <ThemedText style={[styles.noHeartsText, { color: theme.textSecondary }]}>
-            Hearts regenerate over time. Come back in 30 minutes for another heart.
-          </ThemedText>
-          <Spacer height={Spacing.xl} />
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={[styles.exitButton, { backgroundColor: theme.primary }]}
-          >
-            <ThemedText style={styles.exitButtonText}>Return to Courses</ThemedText>
-          </Pressable>
-        </View>
-      </ThemedView>
-    );
-  }
+  // NOTE: For testing/development, lessons don't require hearts to START.
+  // Users only EARN hearts when completing lessons successfully.
+  // The hearts mechanic penalizes wrong answers during the lesson.
+  // Removed the "no hearts" blocker so users can always start lessons.
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>

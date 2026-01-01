@@ -1,10 +1,26 @@
-import React from "react";
-import { StyleSheet, Pressable, View, Switch, Alert } from "react-native";
+// =============================================================================
+// PROFILE SCREEN
+// =============================================================================
+// 
+// Displays user profile with separate sections for:
+// - Financial Overview (income, expenses, debt, savings)
+// - Portfolio (asset allocation with pie chart)
+// - Subscriptions (monthly costs)
+// - Analytics button (moved to bottom)
+// - Sign out
+//
+// Each section has its own edit button for focused editing.
+//
+// =============================================================================
+
+import React, { useMemo } from "react";
+import { StyleSheet, Pressable, View, Alert } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
+import { PortfolioPieChart } from "@/components/PortfolioPieChart";
 import Spacer from "@/components/Spacer";
 import { Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
@@ -12,15 +28,24 @@ import { useUserData } from "@/hooks/useUserData";
 import { useAuthContext } from "@/context/AuthContext";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
 
+// =============================================================================
+// TYPES
+// =============================================================================
+
 type ProfileScreenProps = {
   navigation: NativeStackNavigationProp<ProfileStackParamList, "Profile">;
 };
 
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
+
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { theme } = useTheme();
-  const { profile, financial, setFinancial } = useUserData();
+  const { profile, financial } = useUserData();
   const { signOut, user } = useAuthContext();
 
+  // Handle sign out with error handling
   const handleSignOut = async () => {
     const { error } = await signOut();
     if (error) {
@@ -28,22 +53,22 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     }
   };
 
-  const toggleSubscription = (id: string) => {
-    setFinancial({
-      ...financial,
-      subscriptions: financial.subscriptions.map((sub) =>
-        sub.id === id ? { ...sub, active: !sub.active } : sub
-      ),
-    });
-  };
-
+  // Calculate subscription savings from cancelled subscriptions
   const cancelledSubscriptions = financial.subscriptions.filter((s) => !s.active);
   const savings = cancelledSubscriptions.reduce((sum, sub) => sum + sub.cost, 0);
+  
+  // Calculate total portfolio value
+  const totalPortfolioValue = useMemo(() => {
+    return financial.portfolioAssets.reduce((sum, asset) => sum + asset.currentValue, 0);
+  }, [financial.portfolioAssets]);
 
   return (
     <ScreenScrollView>
       <Spacer height={Spacing.md} />
 
+      {/* ================================================================== */}
+      {/* USER HEADER */}
+      {/* ================================================================== */}
       <View style={styles.header}>
         <View style={[styles.avatar, { backgroundColor: theme.primary + '20' }]}>
           <ThemedText style={[styles.avatarText, { color: theme.primary }]}>
@@ -58,6 +83,9 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
       <Spacer height={Spacing.xl} />
 
+      {/* ================================================================== */}
+      {/* FINANCIAL OVERVIEW - Income, Expenses, Debt, Savings */}
+      {/* ================================================================== */}
       <Pressable
         onPress={() => navigation.navigate('FinancialEdit')}
         style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
@@ -123,20 +151,43 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
       <Spacer height={Spacing.lg} />
 
+      {/* ================================================================== */}
+      {/* PORTFOLIO - Asset Allocation with Pie Chart */}
+      {/* ================================================================== */}
       <Pressable
-        style={({ pressed }) => [
-          styles.analyticsButton,
-          { backgroundColor: theme.primary, opacity: pressed ? 0.85 : 1 },
-        ]}
-        onPress={() => navigation.navigate('Analytics')}
+        onPress={() => navigation.navigate('PortfolioTracker')}
+        style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
       >
-        <Feather name="bar-chart-2" size={20} color="#FFFFFF" />
-        <ThemedText style={styles.analyticsButtonText}>View Analytics</ThemedText>
-        <Feather name="chevron-right" size={20} color="#FFFFFF" />
+        <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.cardHeader}>
+            <ThemedText style={styles.cardTitle}>Portfolio</ThemedText>
+            <View style={styles.headerRight}>
+              <ThemedText style={[styles.portfolioTotal, { color: theme.primary }]}>
+                £{totalPortfolioValue.toLocaleString()}
+              </ThemedText>
+              <Spacer width={Spacing.sm} />
+              <Feather name="edit-2" size={18} color={theme.primary} />
+            </View>
+          </View>
+
+          <Spacer height={Spacing.md} />
+
+          {/* Portfolio Pie Chart showing asset allocation */}
+          <PortfolioPieChart assets={financial.portfolioAssets} />
+
+          <Spacer height={Spacing.sm} />
+
+          <ThemedText style={[styles.tapToEdit, { color: theme.textSecondary }]}>
+            Tap to manage your investments
+          </ThemedText>
+        </ThemedView>
       </Pressable>
 
       <Spacer height={Spacing.lg} />
 
+      {/* ================================================================== */}
+      {/* SUBSCRIPTIONS */}
+      {/* ================================================================== */}
       <Pressable
         onPress={() => navigation.navigate('SubscriptionManager')}
         style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
@@ -148,7 +199,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               <ThemedText style={[styles.subscriptionCount, { color: theme.textSecondary }]}>
                 {financial.subscriptions.length}
               </ThemedText>
-              <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+              <Feather name="edit-2" size={18} color={theme.primary} />
             </View>
           </View>
 
@@ -175,11 +226,37 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               </View>
             </>
           ) : null}
+
+          <Spacer height={Spacing.sm} />
+
+          <ThemedText style={[styles.tapToEdit, { color: theme.textSecondary }]}>
+            Tap to manage subscriptions
+          </ThemedText>
         </ThemedView>
+      </Pressable>
+
+      <Spacer height={Spacing.xl} />
+
+      {/* ================================================================== */}
+      {/* ANALYTICS BUTTON - Moved to bottom */}
+      {/* ================================================================== */}
+      <Pressable
+        style={({ pressed }) => [
+          styles.analyticsButton,
+          { backgroundColor: theme.primary, opacity: pressed ? 0.85 : 1 },
+        ]}
+        onPress={() => navigation.navigate('Analytics')}
+      >
+        <Feather name="bar-chart-2" size={20} color="#FFFFFF" />
+        <ThemedText style={styles.analyticsButtonText}>View Analytics</ThemedText>
+        <Feather name="chevron-right" size={20} color="#FFFFFF" />
       </Pressable>
 
       <Spacer height={Spacing.lg} />
 
+      {/* ================================================================== */}
+      {/* ACCOUNT / SIGN OUT */}
+      {/* ================================================================== */}
       {user ? (
         <View style={styles.accountSection}>
           <ThemedText style={[styles.emailText, { color: theme.textSecondary }]}>
@@ -205,6 +282,10 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     </ScreenScrollView>
   );
 }
+
+// =============================================================================
+// STYLES
+// =============================================================================
 
 const styles = StyleSheet.create({
   header: {
@@ -236,8 +317,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   cardTitle: {
     ...Typography.headline,
+  },
+  portfolioTotal: {
+    ...Typography.headline,
+    fontWeight: '600',
   },
   financialRow: {
     flexDirection: 'row',
@@ -251,20 +340,14 @@ const styles = StyleSheet.create({
     ...Typography.body,
     fontWeight: '600',
   },
-  subscriptionRow: {
+  subscriptionBadge: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.sm,
   },
-  subscriptionInfo: {
-    flex: 1,
-  },
-  subscriptionName: {
+  subscriptionCount: {
     ...Typography.body,
-    marginBottom: Spacing.xs,
-  },
-  subscriptionCost: {
-    ...Typography.footnote,
+    fontWeight: '600',
   },
   savingsCalculator: {
     flexDirection: 'row',
@@ -314,14 +397,5 @@ const styles = StyleSheet.create({
   tapToEdit: {
     ...Typography.caption,
     textAlign: 'center',
-  },
-  subscriptionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  subscriptionCount: {
-    ...Typography.body,
-    fontWeight: '600',
   },
 });
