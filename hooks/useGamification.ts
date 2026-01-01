@@ -33,12 +33,14 @@ import {
 const GAMIFICATION_STORAGE_KEY = 'quantara_gamification_state';
 
 // Default state for new users
-// NOTE: Users start with 0 hearts and earn them through lesson completion
-// This makes hearts feel earned rather than given, encouraging engagement
+// NOTE: Users start with 0 hearts and earn them through course completion
+// Hearts are awarded based on course performance (0-10 scale)
 const DEFAULT_GAMIFICATION_STATE: GamificationState = {
   hearts: 0,                   // Start with no hearts - earn them!
   maxHearts: MAX_HEARTS,
   xp: 0,                       // No XP yet
+  todayXP: 0,                  // XP earned today
+  todayXPDate: '',             // Date for tracking today's XP
   level: 1,                    // Start at level 1
   streak: 0,                   // No streak yet - first lesson brings it to 1
   longestStreak: 0,            // Best streak ever achieved
@@ -46,9 +48,6 @@ const DEFAULT_GAMIFICATION_STATE: GamificationState = {
   heartsLastRefilled: new Date().toISOString(),
   activeDays: [],              // Dates when user was active
 };
-
-// Hearts awarded when completing an entire course
-const COURSE_COMPLETION_HEARTS = 3;
 
 // Predefined achievements users can unlock
 const ACHIEVEMENTS: Achievement[] = [
@@ -387,6 +386,7 @@ export function useGamification() {
 
   /**
    * Awards XP to the user. Applies streak bonus automatically.
+   * Tracks both total XP and today's XP (resets daily).
    * Returns the actual XP gained (after bonus).
    */
   const gainXP = useCallback((baseXP: number): number => {
@@ -397,10 +397,17 @@ export function useGamification() {
     const newTotalXP = state.xp + actualXP;
     const newLevel = calculateLevel(newTotalXP);
 
+    // Track today's XP - reset if it's a new day
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isNewDay = state.todayXPDate !== todayStr;
+    const newTodayXP = isNewDay ? actualXP : (state.todayXP || 0) + actualXP;
+
     const newState: GamificationState = {
       ...state,
       xp: newTotalXP,
       level: newLevel,
+      todayXP: newTodayXP,
+      todayXPDate: todayStr,
     };
 
     setState(newState);
@@ -573,18 +580,25 @@ export function useGamification() {
 
   /**
    * Records a completed course.
-   * Awards 3 bonus hearts for course completion!
-   * This is a major reward to celebrate finishing a full course.
+   * Awards hearts (0-10) based on user's accuracy/performance!
+   * This reward is determined by the contextual bandit's assessment.
+   * 
+   * @param accuracy - Performance score from 0 to 1 (e.g., 0.85 = 85% accuracy)
+   * @returns Array of newly unlocked achievements
    */
-  const recordCourseComplete = useCallback((): Achievement[] => {
+  const recordCourseComplete = useCallback((accuracy: number = 0.5): Achievement[] => {
     const newStats = {
       ...stats,
       coursesCompleted: stats.coursesCompleted + 1,
     };
     setStats(newStats);
 
-    // Award 3 hearts for completing a course - major reward!
-    addHearts(COURSE_COMPLETION_HEARTS);
+    // Award hearts based on accuracy (0-10 scale)
+    // accuracy 0 = 0 hearts, accuracy 1 = 10 hearts
+    const heartsEarned = Math.round(accuracy * 10);
+    if (heartsEarned > 0) {
+      addHearts(heartsEarned);
+    }
 
     return checkAchievements();
   }, [stats, setStats, checkAchievements, addHearts]);
@@ -613,11 +627,16 @@ export function useGamification() {
   // RETURN VALUES
   // ==========================================================================
 
+  // Calculate today's XP (reset if it's a new day)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayXP = state.todayXPDate === todayStr ? (state.todayXP || 0) : 0;
+
   return {
     // Current state
     hearts: state.hearts,
     maxHearts: MAX_HEARTS,
     xp: state.xp,
+    todayXP,
     level: state.level,
     streak: state.streak,
     longestStreak: state.longestStreak || 0,

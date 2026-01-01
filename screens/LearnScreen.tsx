@@ -82,10 +82,9 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
   // Gamification state
   const { 
     hearts, 
-    xp, 
+    todayXP,
     level, 
     streak, 
-    levelProgress,
   } = useGamification();
   
   // Adaptive learning state
@@ -147,7 +146,7 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
         <View style={styles.statItem}>
           <Feather name="award" size={20} color={theme.primary} />
           <ThemedText style={styles.statValue}>Lvl {level}</ThemedText>
-          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>{xp} XP</ThemedText>
+          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>{todayXP} XP today</ThemedText>
         </View>
       </View>
 

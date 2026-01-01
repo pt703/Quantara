@@ -361,9 +361,11 @@ export interface LegacyLesson {
 
 // User's current game state - hearts, XP, streaks
 export interface GamificationState {
-  hearts: number;                // Lives remaining (max 5)
-  maxHearts: number;             // Maximum hearts (5)
+  hearts: number;                // Lives remaining (max 10)
+  maxHearts: number;             // Maximum hearts (10)
   xp: number;                    // Total experience points
+  todayXP: number;               // XP earned today (resets daily)
+  todayXPDate: string;           // Date for todayXP tracking (YYYY-MM-DD)
   level: number;                 // Current level (calculated from XP)
   streak: number;                // Current day streak
   longestStreak: number;         // Best streak ever achieved
@@ -377,7 +379,7 @@ export const XP_PER_LEVEL = 1000;  // XP needed per level
 
 // Hearts regeneration (1 heart per 30 minutes)
 export const HEART_REGEN_MINUTES = 30;
-export const MAX_HEARTS = 5;
+export const MAX_HEARTS = 10;
 
 // Streak bonuses
 export const STREAK_XP_BONUS = {
