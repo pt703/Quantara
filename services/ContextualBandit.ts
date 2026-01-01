@@ -421,7 +421,8 @@ export function getRecommendations(
 
     // Apply domain matching bonus
     // If the lesson matches user's weakest skill, give a small bonus
-    const skillValue = context.skillLevels[lesson.domain as keyof SkillProfile] || 50;
+    // We cast to number since we know domain keys (budgeting, saving, etc.) are numeric
+    const skillValue = getNumericSkillValue(context.skillLevels, lesson.domain);
     const weaknessBonus = (100 - skillValue) / 500; // 0-0.2 bonus for weak areas
 
     // Apply difficulty matching
@@ -510,12 +511,20 @@ function getDifficultyMatch(
  * @param score - The recommendation score
  * @returns A friendly explanation string
  */
+/**
+ * Helper function to safely get a numeric skill value from the profile
+ */
+function getNumericSkillValue(skills: SkillProfile, domain: string): number {
+  const value = skills[domain as keyof SkillProfile];
+  return typeof value === 'number' ? value : 50;
+}
+
 function generateRecommendationReason(
   lesson: Lesson,
   context: LearningContext,
   score: number
 ): string {
-  const skillLevel = context.skillLevels[lesson.domain as keyof SkillProfile] || 50;
+  const skillLevel = getNumericSkillValue(context.skillLevels, lesson.domain);
 
   // Choose reason based on what's most relevant
   if (skillLevel < 40) {
