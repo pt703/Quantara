@@ -41,8 +41,10 @@ const DEFAULT_GAMIFICATION_STATE: GamificationState = {
   xp: 0,                       // No XP yet
   level: 1,                    // Start at level 1
   streak: 0,                   // No streak yet - first lesson brings it to 1
+  longestStreak: 0,            // Best streak ever achieved
   lastActiveDate: '',          // Will be set on first activity
   heartsLastRefilled: new Date().toISOString(),
+  activeDays: [],              // Dates when user was active
 };
 
 // Hearts awarded when completing an entire course
@@ -452,10 +454,21 @@ export function useGamification() {
       }
     }
 
+    // Update longest streak if current streak is higher
+    const newLongestStreak = Math.max(state.longestStreak || 0, newStreak);
+
+    // Add today to active days (keep last 90 days for weekly chart)
+    const existingActiveDays = state.activeDays || [];
+    const newActiveDays = existingActiveDays.includes(todayStr)
+      ? existingActiveDays
+      : [...existingActiveDays, todayStr].slice(-90);
+
     const newState: GamificationState = {
       ...state,
       streak: newStreak,
+      longestStreak: newLongestStreak,
       lastActiveDate: todayStr,
+      activeDays: newActiveDays,
     };
 
     setState(newState);
@@ -607,7 +620,9 @@ export function useGamification() {
     xp: state.xp,
     level: state.level,
     streak: state.streak,
+    longestStreak: state.longestStreak || 0,
     lastActiveDate: state.lastActiveDate,
+    activeDays: state.activeDays || [],
     isLoading,
 
     // Computed values

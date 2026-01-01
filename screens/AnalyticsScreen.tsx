@@ -10,10 +10,12 @@ import { Spacing, Typography, BorderRadius, Colors } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useLearningProgress } from "@/hooks/useLearningProgress";
 import { useContextualBandit } from "@/hooks/useContextualBandit";
+import useGamification from "@/hooks/useGamification";
 import { modules } from "../mock/modules";
 import { SkillDomain } from "@/types";
 
 const { width: screenWidth } = Dimensions.get("window");
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const DOMAIN_LABELS: Record<SkillDomain, string> = {
   budgeting: "Budgeting",
@@ -35,6 +37,7 @@ export default function AnalyticsScreen() {
   const { theme } = useTheme();
   const { getLessonStatus } = useLearningProgress();
   const { getAllPerformanceStats, getCategoryPerformance } = useContextualBandit();
+  const { streak, longestStreak, activeDays, xp, level } = useGamification();
 
   const stats = useMemo(() => {
     let completedLessons = 0;
@@ -88,6 +91,28 @@ export default function AnalyticsScreen() {
     });
   }, [getCategoryPerformance]);
 
+  const weeklyActivity = useMemo(() => {
+    const today = new Date();
+    const weekData: { day: string; active: boolean; date: string }[] = [];
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split("T")[0];
+      const dayIndex = date.getDay();
+      
+      weekData.push({
+        day: DAY_NAMES[dayIndex],
+        active: activeDays.includes(dateStr),
+        date: dateStr,
+      });
+    }
+    
+    return weekData;
+  }, [activeDays]);
+
+  const activeDaysThisWeek = weeklyActivity.filter((d) => d.active).length;
+
   return (
     <ScreenScrollView>
       <Spacer height={Spacing.lg} />
@@ -119,6 +144,76 @@ export default function AnalyticsScreen() {
       </View>
 
       <Spacer height={Spacing.xl} />
+
+      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.streakHeader}>
+          <View>
+            <ThemedText style={styles.cardTitle}>Streaks</ThemedText>
+            <ThemedText style={[styles.cardSubtitle, { color: theme.textSecondary }]}>
+              Keep learning every day
+            </ThemedText>
+          </View>
+        </View>
+        <Spacer height={Spacing.lg} />
+        
+        <View style={styles.streakRow}>
+          <View style={[styles.streakCard, { backgroundColor: theme.primary + "15" }]}>
+            <Feather name="zap" size={24} color={theme.primary} />
+            <ThemedText style={[styles.streakValue, { color: theme.primary }]}>{streak}</ThemedText>
+            <ThemedText style={[styles.streakLabel, { color: theme.textSecondary }]}>Current</ThemedText>
+          </View>
+          <View style={[styles.streakCard, { backgroundColor: theme.success + "15" }]}>
+            <Feather name="award" size={24} color={theme.success} />
+            <ThemedText style={[styles.streakValue, { color: theme.success }]}>{longestStreak}</ThemedText>
+            <ThemedText style={[styles.streakLabel, { color: theme.textSecondary }]}>Longest</ThemedText>
+          </View>
+          <View style={[styles.streakCard, { backgroundColor: theme.warning + "15" }]}>
+            <Feather name="star" size={24} color={theme.warning} />
+            <ThemedText style={[styles.streakValue, { color: theme.warning }]}>{xp}</ThemedText>
+            <ThemedText style={[styles.streakLabel, { color: theme.textSecondary }]}>Total XP</ThemedText>
+          </View>
+        </View>
+      </ThemedView>
+
+      <Spacer height={Spacing.lg} />
+
+      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.weeklyHeader}>
+          <View>
+            <ThemedText style={styles.cardTitle}>Weekly Activity</ThemedText>
+            <ThemedText style={[styles.cardSubtitle, { color: theme.textSecondary }]}>
+              {activeDaysThisWeek}/7 days active this week
+            </ThemedText>
+          </View>
+        </View>
+        <Spacer height={Spacing.lg} />
+        
+        <View style={styles.weeklyChart}>
+          {weeklyActivity.map((item, index) => (
+            <View key={index} style={styles.dayColumn}>
+              <View
+                style={[
+                  styles.dayBar,
+                  {
+                    backgroundColor: item.active ? theme.primary : theme.border,
+                    height: item.active ? 48 : 24,
+                  },
+                ]}
+              />
+              <ThemedText
+                style={[
+                  styles.dayLabel,
+                  { color: item.active ? theme.primary : theme.textSecondary },
+                ]}
+              >
+                {item.day}
+              </ThemedText>
+            </View>
+          ))}
+        </View>
+      </ThemedView>
+
+      <Spacer height={Spacing.lg} />
 
       <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <ThemedText style={styles.cardTitle}>Skill Performance</ThemedText>
@@ -314,6 +409,52 @@ const styles = StyleSheet.create({
   },
   domainStat: {
     ...Typography.caption,
+  },
+  streakHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  streakRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  streakCard: {
+    flex: 1,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
+  streakValue: {
+    ...Typography.title,
+    fontWeight: "700",
+  },
+  streakLabel: {
+    ...Typography.caption,
+  },
+  weeklyHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  weeklyChart: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    paddingHorizontal: Spacing.sm,
+  },
+  dayColumn: {
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  dayBar: {
+    width: 32,
+    borderRadius: BorderRadius.sm,
+  },
+  dayLabel: {
+    ...Typography.caption,
+    fontWeight: "600",
   },
   moduleProgressHeader: {
     flexDirection: "row",

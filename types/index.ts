@@ -366,8 +366,10 @@ export interface GamificationState {
   xp: number;                    // Total experience points
   level: number;                 // Current level (calculated from XP)
   streak: number;                // Current day streak
+  longestStreak: number;         // Best streak ever achieved
   lastActiveDate: string;        // ISO date of last activity
   heartsLastRefilled: string;    // ISO timestamp of last heart refill
+  activeDays: string[];          // Array of YYYY-MM-DD dates when user was active
 }
 
 // XP thresholds for each level
