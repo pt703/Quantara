@@ -39,6 +39,26 @@ export interface BaseQuestion {
   explanation: string;           // Shown after answering (correct or wrong)
   xpReward: number;              // XP earned for correct answer
   difficulty: DifficultyLevel;   // Affects adaptive algorithm
+  
+  // ==========================================================================
+  // ADAPTIVE LEARNING FIELDS - LinUCB Contextual Bandit Integration
+  // ==========================================================================
+  // These fields enable the adaptive difficulty system where:
+  // 1. Questions are grouped by concept (conceptId)
+  // 2. Each concept has 3 difficulty variants: easy, medium, hard
+  // 3. LinUCB selects which difficulty to present based on user skill
+  // 4. Wrong answers trigger the penalty cascade: easy → medium → hard
+  
+  conceptId: string;             // Links questions testing the same concept
+                                 // e.g., "income-types", "compound-interest"
+  
+  variantGroup: string;          // Groups the 3 difficulty variants together
+                                 // e.g., "income-types-v1" contains easy/med/hard
+                                 
+  difficultyTier: 1 | 2 | 3;     // Explicit tier within variant group:
+                                 // 1 = easy (foundational)
+                                 // 2 = medium (applied understanding)
+                                 // 3 = hard (synthesis/analysis)
 }
 
 // All supported question types in the app
@@ -484,8 +504,107 @@ export interface AdaptiveRecommendation {
 }
 
 // =============================================================================
+// CONCEPT VARIANT CATALOG - Groups questions by concept and difficulty
+// =============================================================================
+// 
+// The adaptive difficulty system works as follows:
+// 1. Each quiz has 4 concepts to test
+// 2. Each concept has 3 difficulty variants: easy (tier 1), medium (tier 2), hard (tier 3)
+// 3. User is first tested with the HARD question (efficient for advanced learners)
+// 4. If correct: move to next concept
+// 5. If incorrect: inject easy → medium → hard as penalty cascade
+// 6. Total possible questions: 4 concepts × 3 difficulties = 12 per quiz
+//
+
+// Represents a single concept with its 3 difficulty variants
+export interface ConceptVariant {
+  conceptId: string;             // Unique concept identifier e.g., "income-types"
+  conceptName: string;           // Human readable e.g., "Types of Income"
+  variantGroup: string;          // Groups the variants e.g., "income-types-v1"
+  domain: string;                // Skill domain this concept belongs to
+  
+  // The three difficulty tiers - all must be present
+  easyQuestionId: string;        // Tier 1: Foundational knowledge
+  mediumQuestionId: string;      // Tier 2: Applied understanding
+  hardQuestionId: string;        // Tier 3: Synthesis/analysis
+}
+
+// Catalog of all concepts for a quiz module
+export interface ConceptVariantCatalog {
+  quizModuleId: string;          // ID of the quiz module this catalog belongs to
+  lessonId: string;              // Parent lesson ID
+  concepts: ConceptVariant[];    // The 4 concepts tested in this quiz
+  
+  // Metadata for research
+  totalQuestions: number;        // Should be concepts.length * 3
+  masteryThreshold: number;      // Default 0.8 (80%) to pass
+}
+
+// Tracks a user's progress through the adaptive quiz flow
+export interface AdaptiveQuizState {
+  currentConceptIndex: number;   // Which concept we're testing (0-3)
+  currentTier: 1 | 2 | 3;        // Current difficulty tier being shown
+  conceptResults: ConceptResult[]; // Results per concept
+  
+  // Penalty cascade tracking
+  inPenaltyCascade: boolean;     // True if user got hard question wrong
+  penaltyCascadePosition: number; // 0=easy, 1=medium, 2=hard (in cascade)
+  
+  // Overall stats
+  totalQuestionsAnswered: number;
+  totalCorrect: number;
+  heartsLost: number;
+}
+
+// Result for a single concept attempt
+export interface ConceptResult {
+  conceptId: string;
+  hardAttemptCorrect: boolean | null;  // Result of initial hard question
+  penaltyCascadeTriggered: boolean;    // Did they need the penalty cascade?
+  easyCorrect: boolean | null;         // Result of easy (if triggered)
+  mediumCorrect: boolean | null;       // Result of medium (if triggered)
+  hardRetryCorrect: boolean | null;    // Result of hard retry (if triggered)
+  totalAttempts: number;               // Questions answered for this concept
+  mastered: boolean;                   // Did they demonstrate mastery?
+}
+
+// =============================================================================
 // RESEARCH / ANALYTICS TYPES
 // =============================================================================
+
+// Adaptive attempt log - captures every bandit decision for research
+export interface AdaptiveAttemptLog {
+  id: string;                    // Unique log entry ID
+  timestamp: string;             // ISO timestamp
+  userId: string;                // User identifier (anonymized)
+  sessionId: string;             // Current session ID
+  
+  // Context at decision time
+  userContext: {
+    skillLevels: SkillProfile;
+    streak: number;
+    sessionNumber: number;
+    timeOfDay: string;
+  };
+  
+  // What was shown
+  conceptId: string;             // The concept being tested
+  questionId: string;            // The specific question shown
+  difficultyTier: 1 | 2 | 3;     // Easy/Medium/Hard
+  wasInitialHard: boolean;       // Was this the initial hard test?
+  wasPenalty: boolean;           // Was this part of penalty cascade?
+  penaltyPosition: number;       // Position in cascade (0-2)
+  
+  // Outcome
+  correct: boolean;              // Did user answer correctly?
+  responseTimeMs: number;        // Time to answer
+  heartsRemaining: number;       // Hearts after this question
+  
+  // Bandit parameters (for reproducibility)
+  banditAlpha: number;           // Exploration parameter at decision time
+  conceptArmScore: number;       // UCB score for this concept
+  selectedByBandit: boolean;     // Was concept order determined by LinUCB?
+}
 
 // Stores results of pre/post assessment for research
 export interface AssessmentResult {
