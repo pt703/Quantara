@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -18,6 +19,8 @@ export interface NotificationSettings {
   dailyReminders: boolean;
   achievementAlerts: boolean;
   weeklyProgress: boolean;
+  challengeReminders: boolean;
+  newContentAlerts: boolean;
   reminderTime: string;
 }
 
@@ -25,17 +28,23 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   dailyReminders: true,
   achievementAlerts: true,
   weeklyProgress: true,
+  challengeReminders: true,
+  newContentAlerts: true,
   reminderTime: '09:00',
 };
+
+const STORAGE_KEY = '@quantara_notification_settings';
 
 export function useNotifications() {
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [permission, setPermission] = useState<Notifications.PermissionStatus | null>(null);
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
+  const [isLoading, setIsLoading] = useState(true);
   const notificationListener = useRef<ReturnType<typeof Notifications.addNotificationReceivedListener> | null>(null);
   const responseListener = useRef<ReturnType<typeof Notifications.addNotificationResponseReceivedListener> | null>(null);
 
   useEffect(() => {
+    loadSettings();
     registerForPushNotifications().then((token) => {
       if (token) {
         setExpoPushToken(token);
@@ -59,6 +68,28 @@ export function useNotifications() {
       }
     };
   }, []);
+
+  const loadSettings = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+      }
+    } catch (error) {
+      console.log('Error loading notification settings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveSettings = async (newSettings: NotificationSettings) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
+    } catch (error) {
+      console.log('Error saving notification settings:', error);
+    }
+  };
 
   const registerForPushNotifications = async (): Promise<string | null> => {
     if (Platform.OS === 'web') {
@@ -91,6 +122,20 @@ export function useNotifications() {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#2563EB',
       });
+
+      await Notifications.setNotificationChannelAsync('challenges', {
+        name: 'Challenge Reminders',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#10B981',
+      });
+
+      await Notifications.setNotificationChannelAsync('content', {
+        name: 'New Content',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        vibrationPattern: [0, 250],
+        lightColor: '#8B5CF6',
+      });
     }
 
     try {
@@ -112,7 +157,7 @@ export function useNotifications() {
   }, []);
 
   const scheduleDailyReminder = useCallback(async (hour: number, minute: number) => {
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    await cancelNotificationsByType('daily_reminder');
 
     if (!settings.dailyReminders) return;
 
@@ -129,6 +174,64 @@ export function useNotifications() {
       },
     });
   }, [settings.dailyReminders]);
+
+  const scheduleChallengeReminder = useCallback(async (
+    challengeId: string,
+    challengeTitle: string,
+    delayHours: number = 24
+  ) => {
+    if (!settings.challengeReminders) return;
+
+    const identifier = `challenge_${challengeId}`;
+    
+    await Notifications.cancelScheduledNotificationAsync(identifier).catch(() => {});
+
+    await Notifications.scheduleNotificationAsync({
+      identifier,
+      content: {
+        title: 'Challenge Reminder',
+        body: `Don't forget your challenge: "${challengeTitle}"`,
+        data: { type: 'challenge_reminder', challengeId },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: delayHours * 60 * 60,
+        repeats: true,
+      },
+    });
+  }, [settings.challengeReminders]);
+
+  const cancelChallengeReminder = useCallback(async (challengeId: string) => {
+    const identifier = `challenge_${challengeId}`;
+    await Notifications.cancelScheduledNotificationAsync(identifier).catch(() => {});
+  }, []);
+
+  const scheduleAllChallengeReminders = useCallback(async (
+    activeChallenges: Array<{ id: string; title: string }>
+  ) => {
+    if (!settings.challengeReminders) return;
+
+    for (const challenge of activeChallenges) {
+      await scheduleChallengeReminder(challenge.id, challenge.title, 24);
+    }
+  }, [settings.challengeReminders, scheduleChallengeReminder]);
+
+  const sendNewContentNotification = useCallback(async (contentType: 'lesson' | 'challenge', title: string) => {
+    if (!settings.newContentAlerts) return;
+
+    const body = contentType === 'lesson' 
+      ? `New lesson available: "${title}"`
+      : `New challenge unlocked: "${title}"`;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'New Content Available',
+        body,
+        data: { type: 'new_content', contentType },
+      },
+      trigger: null,
+    });
+  }, [settings.newContentAlerts]);
 
   const sendAchievementNotification = useCallback(async (title: string, body: string) => {
     if (!settings.achievementAlerts) return;
@@ -156,18 +259,71 @@ export function useNotifications() {
     });
   }, [settings.weeklyProgress]);
 
-  const updateSettings = useCallback((newSettings: Partial<NotificationSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
+  const sendChallengeCompletedNotification = useCallback(async (challengeTitle: string) => {
+    if (!settings.achievementAlerts) return;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Challenge Completed!',
+        body: `Congratulations! You completed "${challengeTitle}"`,
+        data: { type: 'challenge_completed' },
+      },
+      trigger: null,
+    });
+  }, [settings.achievementAlerts]);
+
+  const cancelNotificationsByType = async (type: string) => {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    for (const notification of scheduled) {
+      if (notification.content.data?.type === type) {
+        await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+      }
+    }
+  };
+
+  const cancelAllNotifications = useCallback(async () => {
+    await Notifications.cancelAllScheduledNotificationsAsync();
   }, []);
+
+  const getScheduledNotifications = useCallback(async () => {
+    return await Notifications.getAllScheduledNotificationsAsync();
+  }, []);
+
+  const updateSettings = useCallback(async (newSettings: Partial<NotificationSettings>) => {
+    const updated = { ...settings, ...newSettings };
+    setSettings(updated);
+    await saveSettings(updated);
+
+    if (newSettings.dailyReminders === false) {
+      await cancelNotificationsByType('daily_reminder');
+    }
+
+    if (newSettings.challengeReminders === false) {
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      for (const notification of scheduled) {
+        if (notification.content.data?.type === 'challenge_reminder') {
+          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+        }
+      }
+    }
+  }, [settings]);
 
   return {
     expoPushToken,
     permission,
     settings,
+    isLoading,
     requestPermission,
     scheduleDailyReminder,
+    scheduleChallengeReminder,
+    cancelChallengeReminder,
+    scheduleAllChallengeReminders,
+    sendNewContentNotification,
     sendAchievementNotification,
     sendWeeklyProgressNotification,
+    sendChallengeCompletedNotification,
+    cancelAllNotifications,
+    getScheduledNotifications,
     updateSettings,
   };
 }

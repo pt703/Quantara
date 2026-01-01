@@ -8,6 +8,7 @@ import Spacer from '@/components/Spacer';
 import { Spacing, Typography, BorderRadius } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useChallengeProgress } from '@/hooks/useChallengeProgress';
+import { useNotifications } from '@/hooks/useNotifications';
 import { challenges } from '../mock/challenges';
 import { ChallengesStackParamList } from '../navigation/ChallengesStackNavigator';
 
@@ -16,6 +17,11 @@ export default function ChallengeDetailScreen() {
   const navigation = useNavigation();
   const { theme } = useTheme();
   const { getChallengeStatus, setChallengeStatus } = useChallengeProgress();
+  const { 
+    scheduleChallengeReminder, 
+    cancelChallengeReminder,
+    sendChallengeCompletedNotification,
+  } = useNotifications();
   const { challengeId } = route.params;
 
   const challenge = useMemo(() => {
@@ -34,8 +40,17 @@ export default function ChallengeDetailScreen() {
 
   const handleStatusChange = async (newStatus: 'not_started' | 'in_progress' | 'completed') => {
     await setChallengeStatus(challengeId, newStatus);
-    if (newStatus === 'completed') {
+    
+    if (newStatus === 'in_progress' && challenge) {
+      await scheduleChallengeReminder(challengeId, challenge.title, 24);
+    } else if (newStatus === 'completed') {
+      await cancelChallengeReminder(challengeId);
+      if (challenge) {
+        await sendChallengeCompletedNotification(challenge.title);
+      }
       navigation.goBack();
+    } else if (newStatus === 'not_started') {
+      await cancelChallengeReminder(challengeId);
     }
   };
 

@@ -8,6 +8,7 @@ import FinancialEditScreen from "@/screens/FinancialEditScreen";
 import SubscriptionManagerScreen from "@/screens/SubscriptionManagerScreen";
 import DebtTrackerScreen from "@/screens/DebtTrackerScreen";
 import PortfolioTrackerScreen from "@/screens/PortfolioTrackerScreen";
+import NotificationSettingsScreen from "@/screens/NotificationSettingsScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { getCommonScreenOptions } from "@/navigation/screenOptions";
 
@@ -19,6 +20,7 @@ export type ProfileStackParamList = {
   SubscriptionManager: undefined;
   DebtTracker: undefined;
   PortfolioTracker: undefined;
+  NotificationSettings: undefined;
 };
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -75,6 +77,13 @@ export default function ProfileStackNavigator() {
         component={PortfolioTrackerScreen}
         options={{
           title: "Portfolio",
+        }}
+      />
+      <Stack.Screen
+        name="NotificationSettings"
+        component={NotificationSettingsScreen}
+        options={{
+          title: "Notifications",
         }}
       />
     </Stack.Navigator>

@@ -244,7 +244,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       <Spacer height={Spacing.xl} />
 
       {/* ================================================================== */}
-      {/* ANALYTICS BUTTON - Moved to bottom */}
+      {/* ACTION BUTTONS - Analytics and Notifications */}
       {/* ================================================================== */}
       <Pressable
         style={({ pressed }) => [
@@ -256,6 +256,22 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         <Feather name="bar-chart-2" size={20} color="#FFFFFF" />
         <ThemedText style={styles.analyticsButtonText}>View Analytics</ThemedText>
         <Feather name="chevron-right" size={20} color="#FFFFFF" />
+      </Pressable>
+
+      <Spacer height={Spacing.md} />
+
+      <Pressable
+        style={({ pressed }) => [
+          styles.notificationButton,
+          { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+        ]}
+        onPress={() => navigation.navigate('NotificationSettings')}
+      >
+        <Feather name="bell" size={20} color={theme.primary} />
+        <ThemedText style={[styles.notificationButtonText, { color: theme.text }]}>
+          Notification Settings
+        </ThemedText>
+        <Feather name="chevron-right" size={20} color={theme.textSecondary} />
       </Pressable>
 
       <Spacer height={Spacing.lg} />
@@ -376,6 +392,21 @@ const styles = StyleSheet.create({
   analyticsButtonText: {
     ...Typography.headline,
     color: '#FFFFFF',
+    fontWeight: '600',
+    flex: 1,
+  },
+  notificationButton: {
+    marginHorizontal: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    gap: Spacing.md,
+  },
+  notificationButtonText: {
+    ...Typography.headline,
     fontWeight: '600',
     flex: 1,
   },
