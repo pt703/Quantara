@@ -162,3 +162,5 @@ Preferred communication style: Simple, everyday language.
 - Reinforcement learning service for personalized recommendations
 - Analytics service for user behavior tracking
 - Real banking integrations for financial snapshot automation
+
+installation of library
