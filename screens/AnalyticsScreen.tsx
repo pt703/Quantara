@@ -11,7 +11,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useLearningProgress } from "@/hooks/useLearningProgress";
 import { useContextualBandit } from "@/hooks/useContextualBandit";
 import useGamification from "@/hooks/useGamification";
-import { modules } from "../mock/modules";
+import { courses } from "../mock/courses";
 import { SkillDomain } from "@/types";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -43,19 +43,15 @@ export default function AnalyticsScreen() {
     let completedLessons = 0;
     let totalLessons = 0;
     let completedQuizzes = 0;
-    let totalQuizzes = 0;
 
-    modules.forEach((module) => {
-      module.lessons.forEach((lesson) => {
-        if (lesson.type === "quiz") {
-          totalQuizzes++;
-          if (getLessonStatus(lesson.id) === "completed") {
+    courses.forEach((course) => {
+      course.lessons.forEach((lesson) => {
+        totalLessons++;
+        if (getLessonStatus(lesson.id) === "completed") {
+          completedLessons++;
+          const quizModule = lesson.modules.find((m) => m.type === "quiz");
+          if (quizModule) {
             completedQuizzes++;
-          }
-        } else {
-          totalLessons++;
-          if (getLessonStatus(lesson.id) === "completed") {
-            completedLessons++;
           }
         }
       });
@@ -69,7 +65,6 @@ export default function AnalyticsScreen() {
       completedLessons,
       totalLessons,
       completedQuizzes,
-      totalQuizzes,
       totalAttempts,
       successRate: Math.round(totalSuccessRate * 100),
     };
@@ -272,14 +267,12 @@ export default function AnalyticsScreen() {
 
         <View style={styles.progressItem}>
           <View style={styles.progressHeader}>
-            <Feather name="help-circle" size={18} color={theme.success} />
+            <Feather name="check-circle" size={18} color={theme.success} />
             <ThemedText style={styles.progressLabel}>Quizzes Passed</ThemedText>
             <ThemedText style={[styles.progressValue, { color: theme.success }]}>
-              {stats.completedQuizzes}/{stats.totalQuizzes}
+              {stats.completedQuizzes}
             </ThemedText>
           </View>
-          <Spacer height={Spacing.sm} />
-          <ProgressBar progress={(stats.completedQuizzes / stats.totalQuizzes) * 100} />
         </View>
       </ThemedView>
 
@@ -287,24 +280,24 @@ export default function AnalyticsScreen() {
 
       <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <View style={styles.moduleProgressHeader}>
-          <ThemedText style={styles.cardTitle}>Module Progress</ThemedText>
+          <ThemedText style={styles.cardTitle}>Course Progress</ThemedText>
         </View>
         <Spacer height={Spacing.lg} />
 
-        {modules.map((module) => {
-          const completedInModule = module.lessons.filter(
+        {courses.map((course) => {
+          const completedInCourse = course.lessons.filter(
             (l) => getLessonStatus(l.id) === "completed"
           ).length;
-          const progress = (completedInModule / module.lessons.length) * 100;
+          const progress = (completedInCourse / course.lessons.length) * 100;
 
           return (
-            <View key={module.id} style={styles.moduleItem}>
+            <View key={course.id} style={styles.moduleItem}>
               <View style={styles.moduleHeader}>
                 <ThemedText style={styles.moduleTitle} numberOfLines={1}>
-                  {module.title}
+                  {course.title}
                 </ThemedText>
                 <ThemedText style={[styles.moduleCount, { color: theme.textSecondary }]}>
-                  {completedInModule}/{module.lessons.length}
+                  {completedInCourse}/{course.lessons.length}
                 </ThemedText>
               </View>
               <Spacer height={Spacing.sm} />
