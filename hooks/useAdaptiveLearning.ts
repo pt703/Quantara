@@ -47,6 +47,7 @@ const SKILLS_STORAGE_KEY = 'quantara_skill_profile';
 const BANDIT_STORAGE_KEY = 'quantara_bandit_state';
 const COMPLETED_LESSONS_KEY = 'quantara_completed_lessons';
 const LESSON_ATTEMPTS_KEY = 'quantara_lesson_attempts';
+const ASSESSED_COURSES_KEY = 'quantara_assessed_courses';
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -138,6 +139,12 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
   // History of all lesson attempts (for research/analytics)
   const [lessonAttempts, setLessonAttempts] = useStorage<LessonAttemptLog[]>(
     LESSON_ATTEMPTS_KEY,
+    []
+  );
+
+  // Courses that have been assessed (user took pre-assessment)
+  const [assessedCourses, setAssessedCourses] = useStorage<string[]>(
+    ASSESSED_COURSES_KEY,
     []
   );
 
@@ -372,6 +379,43 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
     setSkills(DEFAULT_SKILLS);
   }, [setSkills]);
 
+  /**
+   * Updates a specific skill level directly.
+   * Used after pre-assessment to set initial skill levels.
+   * 
+   * @param domain - The skill domain to update
+   * @param percentage - The new skill level (0-100)
+   */
+  const updateSkill = useCallback((domain: SkillDomain, percentage: number): void => {
+    const clampedPercentage = Math.max(0, Math.min(100, percentage));
+    setSkills(prev => ({
+      ...prev,
+      [domain]: clampedPercentage,
+      lastUpdated: new Date().toISOString(),
+    }));
+  }, [setSkills]);
+
+  /**
+   * Marks a course as having been assessed (user completed pre-assessment).
+   * 
+   * @param courseId - The ID of the course that was assessed
+   */
+  const markCourseAssessed = useCallback((courseId: string): void => {
+    if (!assessedCourses.includes(courseId)) {
+      setAssessedCourses([...assessedCourses, courseId]);
+    }
+  }, [assessedCourses, setAssessedCourses]);
+
+  /**
+   * Checks if a course has been assessed.
+   * 
+   * @param courseId - The ID of the course to check
+   * @returns true if the course has been assessed
+   */
+  const isCourseAssessed = useCallback((courseId: string): boolean => {
+    return assessedCourses.includes(courseId);
+  }, [assessedCourses]);
+
   // ==========================================================================
   // PROGRESS TRACKING
   // ==========================================================================
@@ -514,6 +558,12 @@ export function useAdaptiveLearning(currentStreak: number = 0) {
     strongestSkill,
     resetSkill,
     resetAllSkills,
+    updateSkill,
+
+    // Course assessment
+    assessedCourses,
+    markCourseAssessed,
+    isCourseAssessed,
 
     // Recommendations
     recommendations,

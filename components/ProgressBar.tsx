@@ -6,12 +6,14 @@ import { BorderRadius } from '@/constants/theme';
 interface ProgressBarProps {
   progress: number;
   height?: number;
+  color?: string;
 }
 
-export function ProgressBar({ progress, height = 6 }: ProgressBarProps) {
+export function ProgressBar({ progress, height = 6, color }: ProgressBarProps) {
   const { theme } = useTheme();
   
   const clampedProgress = Math.min(Math.max(progress, 0), 1);
+  const fillColor = color || theme.primary;
 
   return (
     <View
@@ -29,7 +31,7 @@ export function ProgressBar({ progress, height = 6 }: ProgressBarProps) {
           styles.fill,
           {
             width: `${clampedProgress * 100}%`,
-            backgroundColor: theme.primary,
+            backgroundColor: fillColor,
             borderRadius: height / 2,
           },
         ]}

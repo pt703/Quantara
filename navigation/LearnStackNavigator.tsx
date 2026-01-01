@@ -13,6 +13,7 @@ import LearnScreen from "@/screens/LearnScreen";
 import ModuleDetailScreen from "@/screens/ModuleDetailScreen";
 import LessonScreen from "@/screens/LessonScreen";
 import LessonPlayerScreen from "@/screens/LessonPlayerScreen";
+import PreAssessmentScreen from "@/screens/PreAssessmentScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { getCommonScreenOptions } from "@/navigation/screenOptions";
 
@@ -24,6 +25,8 @@ export type LearnStackParamList = {
   // New course-based navigation
   CourseDetail: { courseId: string };
   LessonPlayer: { lessonId: string; courseId: string };
+  // Pre-assessment for first-time course entry
+  PreAssessment: { courseId: string };
 };
 
 const Stack = createNativeStackNavigator<LearnStackParamList>();
@@ -58,7 +61,18 @@ export default function LearnStackNavigator() {
         component={LessonPlayerScreen}
         options={{ 
           headerShown: false, // Custom header inside screen
-          presentation: 'modal',
+          presentation: 'card', // Use card for proper back navigation
+          gestureEnabled: true, // Enable swipe back gesture
+        }}
+      />
+      {/* Pre-assessment for first-time course entry */}
+      <Stack.Screen
+        name="PreAssessment"
+        component={PreAssessmentScreen}
+        options={{ 
+          headerShown: false,
+          presentation: 'card',
+          gestureEnabled: false, // Don't allow back during assessment
         }}
       />
     </Stack.Navigator>

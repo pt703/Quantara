@@ -95,6 +95,7 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
     getPersonalizedLessons,
     getCourseProgress,
     getOverallProgress,
+    isCourseAssessed,
   } = useAdaptiveLearning(streak);
 
   // Refresh recommendations on mount
@@ -153,12 +154,12 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
       <Spacer height={Spacing.lg} />
 
       {/* ================================================================== */}
-      {/* RECOMMENDED FOR YOU */}
+      {/* TEST YOUR SKILL */}
       {/* ================================================================== */}
       {recommendations.length > 0 && (
         <>
           <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionTitle}>Recommended For You</ThemedText>
+            <ThemedText style={styles.sectionTitle}>Test Your Current Skill</ThemedText>
           </View>
 
           <Spacer height={Spacing.sm} />
@@ -264,7 +265,14 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
               { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
             ]}
             onPress={() => {
-              // Navigate to first incomplete lesson or show course detail
+              // Check if user has taken the assessment for this course
+              if (!isCourseAssessed(course.id)) {
+                // First time entering - show pre-assessment
+                navigation.navigate('PreAssessment', { courseId: course.id });
+                return;
+              }
+              
+              // Navigate to first incomplete lesson
               const firstIncomplete = course.lessons.find(
                 l => !course.progress.completed || course.progress.percentage < 100
               );
