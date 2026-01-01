@@ -122,6 +122,11 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
   
   // Track if this is a repeated question (for UI feedback)
   const [isRepeatQuestion, setIsRepeatQuestion] = useState(false);
+  
+  // Track which questions have been attempted at least once (by question ID)
+  // This is used to detect repeat questions - if a question ID is in this set
+  // and it appears again in the queue, it's a repeat (user got it wrong before)
+  const [attemptedQuestions, setAttemptedQuestions] = useState<Set<string>>(new Set());
 
   // Animation values
   const progressWidth = useSharedValue(0);
@@ -184,10 +189,17 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     const newStates = [...questionStates];
     newStates[currentQuestionIndex] = result.isCorrect ? 'correct' : 'incorrect';
     setQuestionStates(newStates);
+    
+    // Mark this question as attempted (for repeat detection on future attempts)
+    // This MUST happen before we add it back to queue on wrong answer
+    if (!attemptedQuestions.has(currentQuestion.id)) {
+      setAttemptedQuestions(prev => new Set([...prev, currentQuestion.id]));
+    }
 
     // Handle correct answer
     if (result.isCorrect) {
       // Add XP with animation (reduced XP for repeated questions)
+      // Repeat questions award 50% XP as per Duolingo-style design
       const xpAmount = isRepeatQuestion ? Math.round(result.xpEarned * 0.5) : result.xpEarned;
       setXpEarned(prev => prev + xpAmount);
       xpScale.value = withSequence(
@@ -207,6 +219,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
       
       // DUOLINGO-STYLE REPETITION: Add the question back to the queue
       // The question will appear again later for the user to practice
+      // When it reappears, it will be detected as a repeat via attemptedQuestions
       setQuestionQueue(prev => [...prev, currentQuestion]);
       setQuestionStates(prev => [...prev, 'unanswered']);
     }
@@ -219,7 +232,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     setTimeout(() => {
       setShowExplanation(true);
     }, 800);
-  }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale, isRepeatQuestion]);
+  }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale, isRepeatQuestion, attemptedQuestions]);
 
   /**
    * Called when user closes explanation and moves to next question.
@@ -245,17 +258,18 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
       // Move to next question in queue
       setCurrentQuestionIndex(prev => prev + 1);
       
-      // Check if next question is a repeat (user got it wrong before)
+      // Check if next question is a repeat using attemptedQuestions set
+      // A question is a repeat if its ID is already in attemptedQuestions
+      // (meaning the user has seen this question before in this lesson)
       const nextQuestion = questionQueue[currentQuestionIndex + 1];
-      if (nextQuestion && questionMastery[nextQuestion.id] === undefined) {
-        setIsRepeatQuestion(false);
+      if (nextQuestion) {
+        const isRepeat = attemptedQuestions.has(nextQuestion.id);
+        setIsRepeatQuestion(isRepeat);
       } else {
-        // This question has been seen before (either mastered or attempted)
-        const wasIncorrectBefore = !questionMastery[nextQuestion?.id];
-        setIsRepeatQuestion(wasIncorrectBefore);
+        setIsRepeatQuestion(false);
       }
     }
-  }, [currentQuestionIndex, questionQueue, originalQuestions, questionMastery]);
+  }, [currentQuestionIndex, questionQueue, originalQuestions, questionMastery, attemptedQuestions, handleLessonComplete]);
 
   /**
    * Called when all questions are answered and mastered.
