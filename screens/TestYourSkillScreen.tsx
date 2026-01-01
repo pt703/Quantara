@@ -59,13 +59,29 @@ interface DomainResult {
 // HELPER FUNCTIONS
 // =============================================================================
 
-function getRandomQuestionsForAssessment(count: number = 10): Question[] {
-  const allQuestions: Question[] = [];
+// Structure to hold question with its source lesson info
+interface QuestionWithSource {
+  question: Question;
+  lessonId: string;
+  courseId: string;
+}
+
+// Get random questions with their source lesson information
+// This is critical for the remediation system - we need to know which lesson
+// a question came from so we can inject remediation into that lesson's quiz
+function getRandomQuestionsWithSource(count: number = 10): QuestionWithSource[] {
+  const allQuestions: QuestionWithSource[] = [];
   
   courses.forEach(course => {
     course.lessons.forEach(lesson => {
       if (lesson.questions && lesson.questions.length > 0) {
-        allQuestions.push(...lesson.questions);
+        lesson.questions.forEach(q => {
+          allQuestions.push({
+            question: q,
+            lessonId: lesson.id,
+            courseId: course.id,
+          });
+        });
       }
     });
   });
@@ -85,7 +101,8 @@ export default function TestYourSkillScreen({ navigation }: TestYourSkillScreenP
   const { gainXP, loseHeart, hearts } = useGamification();
   const { registerWrongAnswer } = useWrongAnswerRegistry();
   
-  const [questions] = useState<Question[]>(() => getRandomQuestionsForAssessment(10));
+  // Store questions WITH their source lesson info for proper remediation tracking
+  const [questionsWithSource] = useState<QuestionWithSource[]>(() => getRandomQuestionsWithSource(10));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, boolean>>({});
   const [showExplanation, setShowExplanation] = useState(false);
@@ -94,8 +111,9 @@ export default function TestYourSkillScreen({ navigation }: TestYourSkillScreenP
   const [showResults, setShowResults] = useState(false);
   const [xpEarned, setXpEarned] = useState(0);
   
-  const progress = questions.length > 0 ? (currentIndex + 1) / questions.length : 0;
-  const currentQuestion = questions[currentIndex];
+  const progress = questionsWithSource.length > 0 ? (currentIndex + 1) / questionsWithSource.length : 0;
+  const currentQuestionData = questionsWithSource[currentIndex];
+  const currentQuestion = currentQuestionData?.question;
   
   const scale = useSharedValue(1);
   
@@ -104,6 +122,8 @@ export default function TestYourSkillScreen({ navigation }: TestYourSkillScreenP
   }));
   
   const handleAnswer = useCallback((result: QuestionResult) => {
+    if (!currentQuestionData) return;
+    
     setAnswers(prev => ({ ...prev, [currentQuestion.id]: result.isCorrect }));
     setLastAnswerCorrect(result.isCorrect);
     setCurrentExplanation(currentQuestion.explanation || '');
@@ -120,13 +140,16 @@ export default function TestYourSkillScreen({ navigation }: TestYourSkillScreenP
     } else {
       loseHeart();
       
+      // Register wrong answer with the ORIGINAL lesson ID
+      // This is critical for remediation - the wrong answer will show up
+      // when the user next plays this lesson's quiz
       const concept = getConceptForQuestion(currentQuestion.id);
       if (concept) {
         registerWrongAnswer(
           currentQuestion.id,
           concept.id,
           currentQuestion.type,
-          'assessment',
+          currentQuestionData.lessonId, // Use actual lesson ID, not 'assessment'
           undefined
         );
       }
@@ -138,17 +161,17 @@ export default function TestYourSkillScreen({ navigation }: TestYourSkillScreenP
     }
     
     setShowExplanation(true);
-  }, [currentQuestion, gainXP, loseHeart, registerWrongAnswer]);
+  }, [currentQuestion, currentQuestionData, gainXP, loseHeart, registerWrongAnswer]);
   
   const handleContinue = useCallback(() => {
     setShowExplanation(false);
     
-    if (currentIndex < questions.length - 1) {
+    if (currentIndex < questionsWithSource.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
       setShowResults(true);
     }
-  }, [currentIndex, questions.length]);
+  }, [currentIndex, questionsWithSource.length]);
   
   const domainResults = useMemo((): DomainResult[] => {
     const domains: Record<SkillDomain, { correct: number; total: number }> = {
@@ -159,11 +182,11 @@ export default function TestYourSkillScreen({ navigation }: TestYourSkillScreenP
       credit: { correct: 0, total: 0 },
     };
     
-    questions.forEach(q => {
-      const concept = getConceptForQuestion(q.id);
+    questionsWithSource.forEach(({ question }) => {
+      const concept = getConceptForQuestion(question.id);
       if (concept && domains[concept.domain]) {
         domains[concept.domain].total++;
-        if (answers[q.id]) {
+        if (answers[question.id]) {
           domains[concept.domain].correct++;
         }
       }
@@ -177,12 +200,12 @@ export default function TestYourSkillScreen({ navigation }: TestYourSkillScreenP
         total: data.total,
         percentage: data.total > 0 ? (data.correct / data.total) * 100 : 0,
       }));
-  }, [questions, answers]);
+  }, [questionsWithSource, answers]);
   
   const overallScore = useMemo(() => {
     const correct = Object.values(answers).filter(Boolean).length;
-    return questions.length > 0 ? (correct / questions.length) * 100 : 0;
-  }, [answers, questions.length]);
+    return questionsWithSource.length > 0 ? (correct / questionsWithSource.length) * 100 : 0;
+  }, [answers, questionsWithSource.length]);
   
   const domainColors: Record<SkillDomain, string> = {
     budgeting: '#10B981',
@@ -282,7 +305,7 @@ export default function TestYourSkillScreen({ navigation }: TestYourSkillScreenP
         
         <View style={styles.progressContainer}>
           <ThemedText style={[styles.progressText, { color: theme.textSecondary }]}>
-            {currentIndex + 1}/{questions.length}
+            {currentIndex + 1}/{questionsWithSource.length}
           </ThemedText>
           <ProgressBar progress={progress} color={theme.primary} height={6} />
         </View>
@@ -335,7 +358,7 @@ export default function TestYourSkillScreen({ navigation }: TestYourSkillScreenP
               onPress={handleContinue}
             >
               <ThemedText style={styles.continueButtonText}>
-                {currentIndex < questions.length - 1 ? 'Continue' : 'See Results'}
+                {currentIndex < questionsWithSource.length - 1 ? 'Continue' : 'See Results'}
               </ThemedText>
             </Pressable>
           </View>
