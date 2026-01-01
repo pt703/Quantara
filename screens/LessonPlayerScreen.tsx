@@ -89,11 +89,19 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
   // STATE
   // ==========================================================================
 
-  // Current question index
+  // Current question index in the dynamic queue
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   
-  // Track state of each question
+  // Dynamic question queue - starts with original questions, grows when wrong answers occur
+  // Duolingo-style: wrong answers add the question back to the queue for repetition
+  const [questionQueue, setQuestionQueue] = useState<Question[]>([]);
+  
+  // Track state of each question attempt (indexed by queue position)
   const [questionStates, setQuestionStates] = useState<QuestionState[]>([]);
+  
+  // Track how many times each original question was answered correctly
+  // Key: question.id, Value: number of times answered correctly (need 1 to "master")
+  const [questionMastery, setQuestionMastery] = useState<Record<string, number>>({});
   
   // Show explanation modal
   const [showExplanation, setShowExplanation] = useState(false);
@@ -111,6 +119,9 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
   
   // Track hearts lost
   const [heartsLost, setHeartsLost] = useState(0);
+  
+  // Track if this is a repeated question (for UI feedback)
+  const [isRepeatQuestion, setIsRepeatQuestion] = useState(false);
 
   // Animation values
   const progressWidth = useSharedValue(0);
@@ -122,25 +133,35 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
 
   const lesson = lessonData?.lesson;
   const course = lessonData?.course;
-  const questions = lesson?.questions || [];
-  const currentQuestion = questions[currentQuestionIndex];
-  const totalQuestions = questions.length;
+  const originalQuestions = lesson?.questions || [];
   
-  // Calculate progress percentage
-  const progress = totalQuestions > 0 
-    ? ((currentQuestionIndex) / totalQuestions) * 100 
+  // Current question from the dynamic queue
+  const currentQuestion = questionQueue[currentQuestionIndex];
+  
+  // Original question count (used for progress calculation)
+  const originalQuestionCount = originalQuestions.length;
+  
+  // Count unique questions mastered (answered correctly at least once)
+  const masteredCount = Object.keys(questionMastery).filter(
+    id => questionMastery[id] >= 1
+  ).length;
+  
+  // Progress is based on unique questions mastered, not queue position
+  const progress = originalQuestionCount > 0 
+    ? (masteredCount / originalQuestionCount) * 100 
     : 0;
 
-  // Count correct answers
+  // Count correct answers for accuracy calculation
   const correctCount = questionStates.filter(s => s === 'correct').length;
-  const accuracy = totalQuestions > 0 ? correctCount / totalQuestions : 0;
+  const accuracy = questionQueue.length > 0 ? correctCount / questionQueue.length : 0;
 
-  // Initialize question states
+  // Initialize question queue with original questions
   useEffect(() => {
-    if (questions.length > 0 && questionStates.length === 0) {
-      setQuestionStates(new Array(questions.length).fill('unanswered'));
+    if (originalQuestions.length > 0 && questionQueue.length === 0) {
+      setQuestionQueue([...originalQuestions]);
+      setQuestionStates(new Array(originalQuestions.length).fill('unanswered'));
     }
-  }, [questions.length, questionStates.length]);
+  }, [originalQuestions.length, questionQueue.length]);
 
   // Animate progress bar
   useEffect(() => {
@@ -153,26 +174,41 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
 
   /**
    * Called when user answers a question.
-   * Updates state, shows feedback, and handles hearts.
+   * Updates state, shows feedback, handles hearts, and implements
+   * Duolingo-style question repetition for wrong answers.
    */
   const handleAnswer = useCallback((result: QuestionResult) => {
-    // Update question state
+    if (!currentQuestion) return;
+    
+    // Update question state for this attempt
     const newStates = [...questionStates];
     newStates[currentQuestionIndex] = result.isCorrect ? 'correct' : 'incorrect';
     setQuestionStates(newStates);
 
     // Handle correct answer
     if (result.isCorrect) {
-      // Add XP with animation
-      setXpEarned(prev => prev + result.xpEarned);
+      // Add XP with animation (reduced XP for repeated questions)
+      const xpAmount = isRepeatQuestion ? Math.round(result.xpEarned * 0.5) : result.xpEarned;
+      setXpEarned(prev => prev + xpAmount);
       xpScale.value = withSequence(
         withTiming(1.3, { duration: 150 }),
         withSpring(1)
       );
+      
+      // Mark question as mastered
+      setQuestionMastery(prev => ({
+        ...prev,
+        [currentQuestion.id]: (prev[currentQuestion.id] || 0) + 1,
+      }));
     } else {
       // Lose a heart on wrong answer
       loseHeart();
       setHeartsLost(prev => prev + 1);
+      
+      // DUOLINGO-STYLE REPETITION: Add the question back to the queue
+      // The question will appear again later for the user to practice
+      setQuestionQueue(prev => [...prev, currentQuestion]);
+      setQuestionStates(prev => [...prev, 'unanswered']);
     }
 
     // Show explanation
@@ -183,33 +219,54 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     setTimeout(() => {
       setShowExplanation(true);
     }, 800);
-  }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale]);
+  }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale, isRepeatQuestion]);
 
   /**
    * Called when user closes explanation and moves to next question.
+   * Duolingo-style: lesson completes only when all unique questions are mastered.
    */
   const handleContinue = useCallback(() => {
     setShowExplanation(false);
 
-    // Check if lesson is complete
-    if (currentQuestionIndex >= totalQuestions - 1) {
-      // Lesson complete!
+    // Check if all original questions are mastered (answered correctly at least once)
+    const allMastered = originalQuestions.every(q => (questionMastery[q.id] || 0) >= 1);
+    
+    // Also check if we've reached the end of the current queue
+    const reachedEndOfQueue = currentQuestionIndex >= questionQueue.length - 1;
+
+    if (allMastered && reachedEndOfQueue) {
+      // Lesson complete - all questions mastered!
+      handleLessonComplete();
+    } else if (reachedEndOfQueue) {
+      // Still have questions in queue that need mastering
+      // This shouldn't happen if we're adding wrong answers back, but just in case
       handleLessonComplete();
     } else {
-      // Move to next question
+      // Move to next question in queue
       setCurrentQuestionIndex(prev => prev + 1);
+      
+      // Check if next question is a repeat (user got it wrong before)
+      const nextQuestion = questionQueue[currentQuestionIndex + 1];
+      if (nextQuestion && questionMastery[nextQuestion.id] === undefined) {
+        setIsRepeatQuestion(false);
+      } else {
+        // This question has been seen before (either mastered or attempted)
+        const wasIncorrectBefore = !questionMastery[nextQuestion?.id];
+        setIsRepeatQuestion(wasIncorrectBefore);
+      }
     }
-  }, [currentQuestionIndex, totalQuestions]);
+  }, [currentQuestionIndex, questionQueue, originalQuestions, questionMastery]);
 
   /**
-   * Called when all questions are answered.
+   * Called when all questions are answered and mastered.
    */
   const handleLessonComplete = useCallback(() => {
     if (!lesson || !course) return;
 
     // Calculate final stats
     const timeSpent = Math.round((Date.now() - startTime) / 1000);
-    const isPerfect = correctCount === totalQuestions;
+    // Perfect score = mastered all questions on first try (no repeats needed)
+    const isPerfect = questionQueue.length === originalQuestionCount;
 
     // Award completion XP
     const completionBonus = Math.round(lesson.xpReward * 0.5);
@@ -229,7 +286,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
 
     // Show completion modal
     setShowCompletion(true);
-  }, [lesson, course, startTime, correctCount, totalQuestions, xpEarned, gainXP, recordLessonAttempt, recordLessonComplete, lessonId, accuracy]);
+  }, [lesson, course, startTime, originalQuestionCount, questionQueue.length, xpEarned, gainXP, recordLessonAttempt, recordLessonComplete, lessonId, accuracy]);
 
   /**
    * Called when user wants to exit the lesson early.
@@ -294,7 +351,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
   }
 
   // Empty questions guard
-  if (questions.length === 0) {
+  if (originalQuestions.length === 0) {
     return (
       <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.noHeartsContainer}>
@@ -386,9 +443,10 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
         contentContainerStyle={styles.questionContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Question counter */}
+        {/* Question counter - shows position in dynamic queue */}
         <ThemedText style={[styles.questionCounter, { color: theme.textSecondary }]}>
-          Question {currentQuestionIndex + 1} of {totalQuestions}
+          Question {currentQuestionIndex + 1} of {questionQueue.length}
+          {isRepeatQuestion ? ' (Review)' : ''}
         </ThemedText>
 
         <Spacer height={Spacing.lg} />
@@ -460,7 +518,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
               ]}
             >
               <ThemedText style={styles.continueButtonText}>
-                {currentQuestionIndex >= totalQuestions - 1 ? 'See Results' : 'Continue'}
+                {currentQuestionIndex >= questionQueue.length - 1 ? 'See Results' : 'Continue'}
               </ThemedText>
             </Pressable>
 
@@ -536,8 +594,8 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
 
             <Spacer height={Spacing.xl} />
 
-            {/* Perfect score message */}
-            {correctCount === totalQuestions && (
+            {/* Perfect score message - achieved if no questions needed repeating */}
+            {questionQueue.length === originalQuestionCount && heartsLost === 0 && (
               <>
                 <View style={[styles.perfectBadge, { backgroundColor: '#22C55E20' }]}>
                   <Feather name="star" size={20} color="#22C55E" />

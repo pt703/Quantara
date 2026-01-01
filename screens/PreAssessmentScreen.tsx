@@ -319,6 +319,10 @@ export default function PreAssessmentScreen({ navigation, route }: PreAssessment
   const [showIntro, setShowIntro] = useState(true);
   const [showResults, setShowResults] = useState(false);
   const [xpEarned, setXpEarned] = useState(0);
+  
+  // Domain selector - users can choose which skill area to focus on first
+  // After completing assessment, this lets users pick their learning path
+  const [selectedDomain, setSelectedDomain] = useState<SkillDomain | null>(null);
 
   const currentQuestion = ASSESSMENT_QUESTIONS[currentQuestionIndex];
   const totalQuestions = ASSESSMENT_QUESTIONS.length;
@@ -592,17 +596,102 @@ export default function PreAssessmentScreen({ navigation, route }: PreAssessment
           <Spacer height={Spacing.lg} />
 
           <ThemedText style={[styles.personalizationText, { color: theme.textSecondary }]}>
-            Your lessons will now be personalized based on these results. We will focus on areas where you need more practice.
+            Your lessons will now be personalized based on these results.
           </ThemedText>
+
+          <Spacer height={Spacing.xl} />
+
+          {/* Domain Selector - Let users choose their focus area */}
+          <ThemedText style={styles.sectionTitle}>Choose Your Focus</ThemedText>
+          <Spacer height={Spacing.sm} />
+          <ThemedText style={[styles.domainSelectorSubtitle, { color: theme.textSecondary }]}>
+            Select which skill you want to improve first:
+          </ThemedText>
+          <Spacer height={Spacing.md} />
+
+          <View style={styles.domainSelectorGrid}>
+            {skillResults.map(result => {
+              const isSelected = selectedDomain === result.domain;
+              const isWeak = result.percentage < 60;
+              
+              return (
+                <Pressable
+                  key={result.domain}
+                  onPress={() => setSelectedDomain(result.domain)}
+                  style={[
+                    styles.domainCard,
+                    { 
+                      backgroundColor: isSelected ? theme.primary + '20' : theme.card,
+                      borderColor: isSelected ? theme.primary : theme.border,
+                    }
+                  ]}
+                >
+                  <View style={styles.domainCardHeader}>
+                    <ThemedText style={[
+                      styles.domainCardTitle,
+                      isSelected && { color: theme.primary }
+                    ]}>
+                      {result.domain.charAt(0).toUpperCase() + result.domain.slice(1)}
+                    </ThemedText>
+                    {isWeak && (
+                      <View style={[styles.recommendedBadge, { backgroundColor: '#EF444420' }]}>
+                        <ThemedText style={[styles.recommendedText, { color: '#EF4444' }]}>
+                          Needs Work
+                        </ThemedText>
+                      </View>
+                    )}
+                  </View>
+                  <View style={[styles.domainCardProgress, { backgroundColor: theme.backgroundSecondary }]}>
+                    <View 
+                      style={[
+                        styles.domainCardProgressFill,
+                        { 
+                          width: `${result.percentage}%`,
+                          backgroundColor: isSelected ? theme.primary :
+                            result.percentage >= 80 ? '#22C55E' :
+                            result.percentage >= 60 ? '#EAB308' : '#EF4444',
+                        }
+                      ]} 
+                    />
+                  </View>
+                  <ThemedText style={[styles.domainCardScore, { color: theme.textSecondary }]}>
+                    {Math.round(result.percentage)}% mastery
+                  </ThemedText>
+                  {isSelected && (
+                    <View style={styles.selectedCheck}>
+                      <Feather name="check-circle" size={20} color={theme.primary} />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
 
           <Spacer height={Spacing.xl} />
 
           <Pressable
             onPress={handleComplete}
-            style={[styles.startButton, { backgroundColor: theme.primary }]}
+            style={[
+              styles.startButton, 
+              { 
+                backgroundColor: selectedDomain ? theme.primary : theme.textSecondary,
+                opacity: selectedDomain ? 1 : 0.6,
+              }
+            ]}
+            disabled={!selectedDomain}
           >
             <ThemedText style={styles.startButtonText}>
-              Start Learning
+              {selectedDomain 
+                ? `Start with ${selectedDomain.charAt(0).toUpperCase() + selectedDomain.slice(1)}`
+                : 'Select a Focus Area'}
+            </ThemedText>
+          </Pressable>
+          
+          <Spacer height={Spacing.sm} />
+          
+          <Pressable onPress={handleComplete} style={styles.skipFocusButton}>
+            <ThemedText style={[styles.skipFocusText, { color: theme.textSecondary }]}>
+              or let the app decide for me
             </ThemedText>
           </Pressable>
 
@@ -858,5 +947,68 @@ const styles = StyleSheet.create({
   personalizationText: {
     ...Typography.body,
     textAlign: 'center',
+  },
+  // Domain Selector styles
+  domainSelectorSubtitle: {
+    ...Typography.body,
+    textAlign: 'center',
+    alignSelf: 'center',
+  },
+  domainSelectorGrid: {
+    width: '100%',
+    gap: Spacing.md,
+  },
+  domainCard: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 2,
+    position: 'relative',
+  },
+  domainCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  domainCardTitle: {
+    ...Typography.headline,
+    fontSize: 16,
+  },
+  recommendedBadge: {
+    paddingVertical: 2,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+  },
+  recommendedText: {
+    ...Typography.caption,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  domainCardProgress: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginVertical: Spacing.xs,
+  },
+  domainCardProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  domainCardScore: {
+    ...Typography.caption,
+    marginTop: Spacing.xs,
+  },
+  selectedCheck: {
+    position: 'absolute',
+    top: Spacing.md,
+    right: Spacing.md,
+  },
+  skipFocusButton: {
+    padding: Spacing.sm,
+    alignItems: 'center',
+  },
+  skipFocusText: {
+    ...Typography.body,
+    fontSize: 14,
   },
 });
