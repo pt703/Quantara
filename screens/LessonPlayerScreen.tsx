@@ -128,6 +128,10 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
   // This is used to detect repeat questions - if a question ID is in this set
   // and it appears again in the queue, it's a repeat (user got it wrong before)
   const [attemptedQuestions, setAttemptedQuestions] = useState<Set<string>>(new Set());
+  
+  // Track first-attempt results for accurate skill calculation
+  // Key: question.id, Value: true if correct on first try, false if wrong
+  const [firstAttemptResults, setFirstAttemptResults] = useState<Record<string, boolean>>({});
 
   // Animation values
   const progressWidth = useSharedValue(0);
@@ -158,8 +162,12 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     : 0;
 
   // Count correct answers for accuracy calculation
-  const correctCount = questionStates.filter(s => s === 'correct').length;
-  const accuracy = questionQueue.length > 0 ? correctCount / questionQueue.length : 0;
+  // Use original question count so 4/4 = 100%, 3/4 = 75%, etc.
+  // Accuracy is based on first attempts only (not repeats)
+  const firstAttemptCorrectCount = Object.values(firstAttemptResults).filter(r => r === true).length;
+  const accuracy = originalQuestionCount > 0 
+    ? firstAttemptCorrectCount / originalQuestionCount 
+    : 0;
 
   // Initialize question queue with original questions
   useEffect(() => {
@@ -193,8 +201,14 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     
     // Mark this question as attempted (for repeat detection on future attempts)
     // This MUST happen before we add it back to queue on wrong answer
-    if (!attemptedQuestions.has(currentQuestion.id)) {
+    const isFirstAttempt = !attemptedQuestions.has(currentQuestion.id);
+    if (isFirstAttempt) {
       setAttemptedQuestions(prev => new Set([...prev, currentQuestion.id]));
+      // Record first-attempt result for accurate skill calculation
+      setFirstAttemptResults(prev => ({
+        ...prev,
+        [currentQuestion.id]: result.isCorrect,
+      }));
     }
 
     // Handle correct answer
