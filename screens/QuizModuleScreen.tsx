@@ -92,7 +92,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   const insets = useSafeAreaInsets();
   
   const { recordQuizAttempt, getModuleProgress } = useModuleProgress();
-  const { hearts, loseHeart, gainXP, addHearts, streak } = useGamification();
+  const { hearts, loseHeart, gainXP, addHearts, streak, recordLessonComplete } = useGamification();
   const { registerWrongAnswer, markRemediated } = useWrongAnswerRegistry();
   const { recordQuizResult } = useSkillAccuracy();
   const { recordLessonAttempt } = useAdaptiveLearning(streak);
@@ -509,6 +509,10 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         recordQuizResult(lessonDomain, totalCorrect, totalAttempts);
       }
       
+      // Update streak - lesson/quiz completed!
+      const isPerfect = score === 100;
+      recordLessonComplete(isPerfect);
+      
       // Log final results for research
       console.log('[ADAPTIVE QUIZ COMPLETE]', {
         conceptsTeached: module?.conceptVariants?.length || 0,
@@ -538,13 +542,16 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         recordQuizResult(lessonDomain, totalCorrect, totalAttempts);
       }
       
+      // Update streak - lesson/quiz completed!
+      recordLessonComplete(score === 100);
+      
       setShowCompletion(true);
     } else {
       // Move to next question in queue
       setCurrentIndex(prev => prev + 1);
     }
   }, [currentIndex, questionQueue, module, masteredConcepts, totalCorrect, totalAttempts, 
-      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult]);
+      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult, recordLessonComplete]);
 
   // Handle completion dismiss
   const handleCompletionClose = useCallback(() => {
