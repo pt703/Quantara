@@ -202,36 +202,6 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
         <Feather name="chevron-right" size={24} color={theme.primary} />
       </Pressable>
 
-      <Spacer height={Spacing.md} />
-
-      {/* AI Practice Mode */}
-      <Pressable
-        style={({ pressed }) => [
-          styles.testSkillCard,
-          { 
-            backgroundColor: theme.warning + '15', 
-            borderColor: theme.warning,
-            opacity: pressed ? 0.8 : 1,
-          },
-        ]}
-        onPress={() => navigation.navigate('AIPractice')}
-      >
-        <View style={[styles.testSkillIcon, { backgroundColor: theme.warning }]}>
-          <Feather name="cpu" size={24} color="#FFFFFF" />
-        </View>
-
-        <View style={styles.testSkillContent}>
-          <ThemedText style={styles.testSkillTitle}>
-            AI Practice Mode
-          </ThemedText>
-          <ThemedText style={[styles.testSkillSubtitle, { color: theme.textSecondary }]}>
-            Personalized questions using your finances
-          </ThemedText>
-        </View>
-
-        <Feather name="chevron-right" size={24} color={theme.warning} />
-      </Pressable>
-
       <Spacer height={Spacing.xl} />
 
       {/* ================================================================== */}

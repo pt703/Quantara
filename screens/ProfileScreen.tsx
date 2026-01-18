@@ -274,22 +274,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         <Feather name="chevron-right" size={20} color={theme.textSecondary} />
       </Pressable>
 
-      <Spacer height={Spacing.md} />
-
-      <Pressable
-        style={({ pressed }) => [
-          styles.notificationButton,
-          { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
-        ]}
-        onPress={() => navigation.navigate('AISettings')}
-      >
-        <Feather name="cpu" size={20} color={theme.primary} />
-        <ThemedText style={[styles.notificationButtonText, { color: theme.text }]}>
-          AI Features
-        </ThemedText>
-        <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-      </Pressable>
-
       <Spacer height={Spacing.lg} />
 
       {/* ================================================================== */}

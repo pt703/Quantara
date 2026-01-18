@@ -18,7 +18,6 @@ import CourseDetailScreen from "@/screens/CourseDetailScreen";
 import TestYourSkillScreen from "@/screens/TestYourSkillScreen";
 import ReadingModuleScreen from "@/screens/ReadingModuleScreen";
 import QuizModuleScreen from "@/screens/QuizModuleScreen";
-import AIPracticeScreen from "@/screens/AIPracticeScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { getCommonScreenOptions } from "@/navigation/screenOptions";
 import { ReadingModule, QuizModule } from "@/types";
@@ -55,7 +54,6 @@ export type LearnStackParamList = {
     module: QuizModule;
     allModules: (ReadingModule | QuizModule)[];
   };
-  AIPractice: undefined;
 };
 
 const Stack = createNativeStackNavigator<LearnStackParamList>();
@@ -142,16 +140,6 @@ export default function LearnStackNavigator() {
           headerShown: false,
           presentation: 'card',
           gestureEnabled: false, // Cannot leave until complete
-        }}
-      />
-      {/* AI Practice - personalized question generation */}
-      <Stack.Screen
-        name="AIPractice"
-        component={AIPracticeScreen}
-        options={{ 
-          headerTitle: 'AI Practice',
-          presentation: 'card',
-          gestureEnabled: true,
         }}
       />
     </Stack.Navigator>
