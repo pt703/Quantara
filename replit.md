@@ -43,6 +43,14 @@ Preferred communication style: Simple, everyday language.
   - `useChallengeProgress`: Challenge status tracking
   - `useStorage`: Generic AsyncStorage wrapper with automatic JSON serialization
   - `useTheme`: Theme and color scheme management
+  - `useGamification`: Hearts, XP, and streak tracking with reactive updates
+    - Hearts awarded (+5) on quiz completion instead of penalties
+    - Daily XP tracking with visual feedback (lightning icon)
+    - Day streak tracking with fire emoji display
+  - `useSkillAccuracy`: Quiz performance tracking per skill domain
+    - Tracks correct/total questions per domain (budgeting, saving, debt, credit, investing)
+    - Displays as "4/6" format instead of percentages for clarity
+    - Persisted to AsyncStorage with automatic reload on screen focus
   - `useNotifications`: Push notification setup and management with settings persistence
     - Challenge reminders (24-hour repeating for in-progress challenges)
     - Challenge completion notifications
