@@ -24,6 +24,7 @@ import { Spacing, Typography, BorderRadius } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useGamification } from '@/hooks/useGamification';
 import { useAdaptiveLearning } from '@/hooks/useAdaptiveLearning';
+import { useSkillAccuracy } from '@/hooks/useSkillAccuracy';
 import { courses } from '../mock/courses';
 import { LearnStackParamList } from '../navigation/LearnStackNavigator';
 import { SkillDomain } from '../types';
@@ -40,32 +41,36 @@ type LearnScreenProps = {
 // SKILL PROGRESS COMPONENT
 // =============================================================================
 
-// Component to display a single skill level
+// Component to display a single skill level with accuracy tracking
 interface SkillBarProps {
   domain: SkillDomain;
-  level: number;
+  correct: number;
+  total: number;
   color: string;
 }
 
-function SkillBar({ domain, level, color }: SkillBarProps) {
+function SkillBar({ domain, correct, total, color }: SkillBarProps) {
   const { theme } = useTheme();
   
   // Format domain name for display
   const displayName = domain.charAt(0).toUpperCase() + domain.slice(1);
+  
+  // Calculate percentage for progress bar
+  const percentage = total > 0 ? (correct / total) * 100 : 0;
   
   return (
     <View style={styles.skillBarContainer}>
       <View style={styles.skillBarHeader}>
         <ThemedText style={styles.skillName}>{displayName}</ThemedText>
         <ThemedText style={[styles.skillLevel, { color: theme.textSecondary }]}>
-          {Math.round(level)}%
+          {correct}/{total}
         </ThemedText>
       </View>
       <View style={[styles.skillBarBg, { backgroundColor: theme.border }]}>
         <View 
           style={[
             styles.skillBarFill, 
-            { width: `${Math.min(level, 100)}%`, backgroundColor: color }
+            { width: `${Math.min(percentage, 100)}%`, backgroundColor: color }
           ]} 
         />
       </View>
@@ -100,17 +105,23 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
     reload: reloadLearning,
   } = useAdaptiveLearning(streak);
 
+  // Skill accuracy tracking
+  const {
+    accuracy: skillAccuracy,
+    reload: reloadSkillAccuracy,
+  } = useSkillAccuracy();
+
   // Refresh data when screen comes into focus (e.g., returning from a lesson)
   // Note: We intentionally exclude getPersonalizedLessons from deps to prevent infinite loops
   // The reload functions are stable, but getPersonalizedLessons changes on every state update
   useFocusEffect(
     useCallback(() => {
       const refreshData = async () => {
-        await Promise.all([reloadGamification(), reloadLearning()]);
+        await Promise.all([reloadGamification(), reloadLearning(), reloadSkillAccuracy()]);
         getPersonalizedLessons(3);
       };
       refreshData();
-    }, [reloadGamification, reloadLearning]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [reloadGamification, reloadLearning, reloadSkillAccuracy]) // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Overall progress
@@ -146,18 +157,18 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Hearts</ThemedText>
         </View>
 
-        {/* Streak */}
+        {/* Streak - Fire emoji */}
         <View style={styles.statItem}>
-          <Feather name="zap" size={20} color="#F59E0B" />
+          <ThemedText style={styles.emojiIcon}>🔥</ThemedText>
           <ThemedText style={styles.statValue}>{streak}</ThemedText>
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Day Streak</ThemedText>
         </View>
 
-        {/* XP / Level */}
+        {/* XP Today - Lightning icon */}
         <View style={styles.statItem}>
-          <Feather name="award" size={20} color={theme.primary} />
-          <ThemedText style={styles.statValue}>Lvl {level}</ThemedText>
-          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>{todayXP} XP today</ThemedText>
+          <ThemedText style={styles.emojiIcon}>⚡</ThemedText>
+          <ThemedText style={styles.statValue}>{todayXP}</ThemedText>
+          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>XP today</ThemedText>
         </View>
       </View>
 
@@ -217,15 +228,15 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
       <Spacer height={Spacing.sm} />
 
       <View style={[styles.skillsCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <SkillBar domain="budgeting" level={skills.budgeting} color={skillColors.budgeting} />
+        <SkillBar domain="budgeting" correct={skillAccuracy.budgeting.correct} total={skillAccuracy.budgeting.total} color={skillColors.budgeting} />
         <Spacer height={Spacing.md} />
-        <SkillBar domain="saving" level={skills.saving} color={skillColors.saving} />
+        <SkillBar domain="saving" correct={skillAccuracy.saving.correct} total={skillAccuracy.saving.total} color={skillColors.saving} />
         <Spacer height={Spacing.md} />
-        <SkillBar domain="debt" level={skills.debt} color={skillColors.debt} />
+        <SkillBar domain="debt" correct={skillAccuracy.debt.correct} total={skillAccuracy.debt.total} color={skillColors.debt} />
         <Spacer height={Spacing.md} />
-        <SkillBar domain="credit" level={skills.credit} color={skillColors.credit} />
+        <SkillBar domain="credit" correct={skillAccuracy.credit.correct} total={skillAccuracy.credit.total} color={skillColors.credit} />
         <Spacer height={Spacing.md} />
-        <SkillBar domain="investing" level={skills.investing} color={skillColors.investing} />
+        <SkillBar domain="investing" correct={skillAccuracy.investing.correct} total={skillAccuracy.investing.total} color={skillColors.investing} />
       </View>
 
       <Spacer height={Spacing.xl} />
@@ -325,6 +336,9 @@ const styles = StyleSheet.create({
   statLabel: {
     ...Typography.caption,
     marginTop: 2,
+  },
+  emojiIcon: {
+    fontSize: 20,
   },
   sectionHeader: {
     paddingHorizontal: Spacing.lg,

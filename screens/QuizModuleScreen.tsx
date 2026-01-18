@@ -55,11 +55,12 @@ import { useTheme } from '@/hooks/useTheme';
 import { useModuleProgress } from '@/hooks/useModuleProgress';
 import { useGamification } from '@/hooks/useGamification';
 import { useWrongAnswerRegistry } from '@/hooks/useWrongAnswerRegistry';
+import { useSkillAccuracy } from '@/hooks/useSkillAccuracy';
 import { Spacing, BorderRadius, Typography } from '@/constants/theme';
-import { QuizModule, Question, ConceptVariant, AdaptiveQuizState, ConceptResult } from '../types';
+import { QuizModule, Question, ConceptVariant, AdaptiveQuizState, ConceptResult, SkillDomain } from '../types';
 import { LearnStackParamList } from '../navigation/LearnStackNavigator';
 import { getConceptForQuestion, getVariantQuestions } from '../mock/conceptTags';
-import { getQuestionById } from '../mock/courses';
+import { getQuestionById, getLessonById } from '../mock/courses';
 
 // =============================================================================
 // TYPES
@@ -90,11 +91,16 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   const insets = useSafeAreaInsets();
   
   const { recordQuizAttempt, getModuleProgress } = useModuleProgress();
-  const { hearts, loseHeart, gainXP } = useGamification();
+  const { hearts, loseHeart, gainXP, addHearts } = useGamification();
   const { registerWrongAnswer, markRemediated } = useWrongAnswerRegistry();
+  const { recordQuizResult } = useSkillAccuracy();
   
   // Get module data from route params
   const module = route.params.module as QuizModule | undefined;
+  
+  // Get lesson domain for skill tracking
+  const lessonData = getLessonById(lessonId);
+  const lessonDomain = lessonData?.lesson?.domain as SkillDomain | undefined;
   
   // Reference to track question start time for research logging
   const questionStartTime = useRef<number>(Date.now());
@@ -132,6 +138,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   // Stats tracking
   const [xpEarned, setXpEarned] = useState(0);
   const [heartsLost, setHeartsLost] = useState(0);
+  const [heartsEarned, setHeartsEarned] = useState(0);
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalAttempts, setTotalAttempts] = useState(0);
 
@@ -487,12 +494,22 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       const score = Math.round((totalCorrect / totalAttempts) * 100);
       recordQuizAttempt(moduleId, score, module?.masteryThreshold);
       
+      // Award +5 hearts for completing the quiz
+      addHearts(5);
+      setHeartsEarned(5);
+      
+      // Record skill accuracy for the lesson domain
+      if (lessonDomain) {
+        recordQuizResult(lessonDomain, totalCorrect, totalAttempts);
+      }
+      
       // Log final results for research
       console.log('[ADAPTIVE QUIZ COMPLETE]', {
         conceptsTeached: module?.conceptVariants?.length || 0,
         totalQuestions: totalAttempts,
         accuracy: score,
         conceptResults: Array.from(conceptResults.entries()),
+        heartsEarned: 5,
       });
       
       setShowCompletion(true);
@@ -501,13 +518,23 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       // This shouldn't happen with proper cascade logic, but handle gracefully
       const score = Math.round((totalCorrect / totalAttempts) * 100);
       recordQuizAttempt(moduleId, score, module?.masteryThreshold);
+      
+      // Still award hearts for completing
+      addHearts(5);
+      setHeartsEarned(5);
+      
+      // Record skill accuracy
+      if (lessonDomain) {
+        recordQuizResult(lessonDomain, totalCorrect, totalAttempts);
+      }
+      
       setShowCompletion(true);
     } else {
       // Move to next question in queue
       setCurrentIndex(prev => prev + 1);
     }
   }, [currentIndex, questionQueue, module, masteredConcepts, totalCorrect, totalAttempts, 
-      moduleId, recordQuizAttempt, conceptResults]);
+      moduleId, recordQuizAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult]);
 
   // Handle completion dismiss
   const handleCompletionClose = useCallback(() => {
@@ -750,14 +777,14 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
                 </ThemedText>
               </View>
 
-              {/* Hearts Lost */}
+              {/* Hearts Earned */}
               <View style={styles.statItem}>
                 <Feather name="heart" size={24} color="#EF4444" />
                 <ThemedText style={styles.statValue}>
-                  -{heartsLost}
+                  +{heartsEarned}
                 </ThemedText>
                 <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
-                  Hearts Lost
+                  Hearts
                 </ThemedText>
               </View>
             </View>
@@ -765,7 +792,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
             <Spacer height={Spacing.xl} />
 
             {/* Perfect score message */}
-            {heartsLost === 0 && (
+            {totalCorrect === totalAttempts && (
               <>
                 <View style={[styles.perfectBadge, { backgroundColor: '#22C55E20' }]}>
                   <Feather name="star" size={20} color="#22C55E" />
