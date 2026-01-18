@@ -161,10 +161,32 @@ Preferred communication style: Simple, everyday language.
 - **Prettier**: Code formatting
 - **babel-plugin-module-resolver**: Path alias resolution (@/* imports)
 
+## AI-Powered Learning (Google Gemini Integration)
+
+**Architecture**:
+- `lib/gemini.ts`: Core Gemini API service with question generation, feedback, and insights
+- `hooks/useAI.ts`: React hook for AI functionality with caching and state management
+- API key stored securely in AsyncStorage, user configures in AI Settings screen
+
+**AI Features**:
+- **Personalized Question Generation**: Uses user's financial snapshot (income, expenses, debt, savings) to create contextually relevant questions
+- **Adaptive Difficulty**: Four levels (easy, medium, hard, expert) that adjust question complexity
+- **Smart Feedback**: AI generates detailed explanations for correct/incorrect answers
+- **Question Types**: MCQ, true/false, calculation, and scenario-based questions
+- **Topic Coverage**: Budgeting, Saving, Debt Management, Credit, Investing
+
+**Navigation**:
+- AI Practice Mode accessible from Learn screen
+- AI Settings accessible from Profile screen
+- Free tier: 60 API requests per minute (suitable for learning app)
+
+**Environment Variables**:
+- API key stored locally in AsyncStorage (not server-side)
+- User enters their own Gemini API key in Settings
+
 ## Future Integration Points
 - OAuth providers (Apple, Google) for social sign-in via Supabase
 - Backend API tables in Supabase for cloud sync of user data
-- Reinforcement learning service for personalized recommendations
 - Analytics service for user behavior tracking
 - Real banking integrations for financial snapshot automation
 
