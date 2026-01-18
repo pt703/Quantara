@@ -268,17 +268,53 @@ const moneyFoundationsLessons: Lesson[] = [
     xpReward: 50,
     content: `# What is a Budget?
 
-A budget is your money's game plan. It's a simple tool that shows you exactly where your money comes from and where it goes.
+A budget is your money's game plan. Think of it as a roadmap that shows exactly where your money comes from and where it should go each month. Unlike tracking spending after the fact, budgeting is about making intentional decisions BEFORE you spend.
 
-## Why Budget?
+## Why Budgeting Changes Everything
 
-Without a budget, money disappears. Studies show people who budget save 20% more than those who don't.
+Studies consistently show that people who budget save approximately 20% more than those who don't. Why? Because awareness drives better decisions.
 
-## The Basic Idea
+Here's what happens without a budget:
+- Money "disappears" and you wonder where it went
+- Small purchases add up without you noticing
+- You're more likely to overspend on impulse buys
+- Savings become an afterthought, not a priority
+
+Here's what happens WITH a budget:
+- You see exactly where every pound goes
+- You catch spending leaks before they drain your account
+- You make conscious choices aligned with your goals
+- You pay yourself first by planning savings upfront
+
+## The Fundamental Budget Equation
+
+Every budget comes down to one simple equation:
 
 **Income** - **Expenses** = **What's Left**
 
-That's it! A budget just helps you plan this equation before spending, not after.`,
+Your income is all money coming in: salary, wages, freelance work, gifts, or any other source. Your expenses are everything going out: rent, food, transport, entertainment, subscriptions, and more.
+
+The goal is to make "What's Left" as large as possible - and then direct that surplus toward your goals, whether that's building an emergency fund, paying off debt, or investing for the future.
+
+## When to Create Your Budget
+
+The best time to create a budget is:
+- At the start of each month (monthly budgeting)
+- When you receive a paycheck (paycheck-to-paycheck budgeting)
+- After any major life change (new job, moving, etc.)
+
+Review your budget weekly to stay on track, and adjust as needed. Life happens, and your budget should be flexible enough to handle it.
+
+## Common Budgeting Myths Debunked
+
+**Myth:** "Budgets are restrictive and no fun"
+**Reality:** Budgets give you PERMISSION to spend on what matters to you, guilt-free
+
+**Myth:** "I don't make enough money to budget"
+**Reality:** Budgeting is even MORE important when money is tight
+
+**Myth:** "Budgeting is too time-consuming"
+**Reality:** Once set up, maintaining a budget takes just 15-30 minutes per week`,
     questions: [
       // =====================================================================
       // CONCEPT 1: budget-definition - What a budget is
@@ -516,17 +552,65 @@ That's it! A budget just helps you plan this equation before spending, not after
     xpReward: 60,
     content: `# Income vs Expenses
 
-Understanding the difference between what comes in and what goes out is fundamental to financial health.
+Understanding the difference between what comes in and what goes out is the foundation of every financial decision you'll ever make. Let's break down these two categories in detail.
 
-## Types of Income
-- **Active Income**: Money from work (salary, wages, freelance)
-- **Passive Income**: Money that comes with minimal effort (investments, rentals)
+## Understanding Your Income
 
-## Types of Expenses
-- **Fixed Expenses**: Same amount every month (rent, car payment, subscriptions)
-- **Variable Expenses**: Change month to month (groceries, entertainment, utilities)
+Income is any money flowing INTO your accounts. There are two main types:
 
-Your goal: Income > Expenses`,
+**Active Income** is money you earn by trading your time and effort for payment. This includes:
+- Salary or wages from your job
+- Freelance or contract work
+- Tips and commissions
+- Bonuses and overtime pay
+
+**Passive Income** is money that comes with minimal ongoing effort once set up. This includes:
+- Investment dividends and interest
+- Rental property income
+- Royalties from creative work
+- Income from businesses you own but don't actively manage
+
+Most people start with only active income. The path to financial freedom often involves gradually building passive income streams over time.
+
+## Understanding Your Expenses
+
+Expenses are all the money flowing OUT of your accounts. They fall into two categories:
+
+**Fixed Expenses** stay the same (or nearly the same) every month:
+- Rent or mortgage payments
+- Car payments or transport passes
+- Insurance premiums
+- Loan repayments
+- Streaming subscriptions
+
+**Variable Expenses** change from month to month:
+- Groceries and household supplies
+- Utilities (electricity, gas, water)
+- Entertainment and dining out
+- Clothing and personal care
+- Unexpected costs and repairs
+
+## The Golden Rule
+
+Your primary financial goal should always be: **Income > Expenses**
+
+When income exceeds expenses, you have a surplus. This surplus is your ticket to:
+- Building an emergency fund
+- Paying off debt faster
+- Investing for the future
+- Achieving financial goals
+
+When expenses exceed income, you have a deficit. This leads to:
+- Taking on debt
+- Depleting savings
+- Financial stress and worry
+
+## Practical Tips
+
+- Track both income and expenses for at least one full month to understand your patterns
+- Look for "expense leaks" - small recurring costs that add up (unused subscriptions, bank fees)
+- Try to convert some variable expenses to fixed ones for better predictability
+- Aim to gradually increase the gap between income and expenses over time`,
     questions: [
       {
         id: 'mf-2-q1',
@@ -592,18 +676,62 @@ Your goal: Income > Expenses`,
     xpReward: 55,
     content: `# Needs vs Wants
 
-One of the most important skills in budgeting is telling the difference between what you NEED and what you WANT.
+One of the most powerful budgeting skills is learning to distinguish between what you truly NEED and what you WANT. This distinction forms the basis of smart spending decisions and is essential for achieving your financial goals.
 
-## Needs
-Things essential for survival and basic functioning:
-- Housing, food, utilities, transportation to work, basic healthcare
+## What Are Needs?
 
-## Wants
-Things that improve life quality but aren't essential:
-- Streaming services, dining out, latest phone, designer clothes
+Needs are expenses essential for your survival, health, and ability to earn income. They're non-negotiable requirements for basic functioning:
 
-## The Trick
-Wants often disguise themselves as needs. "I NEED that coffee!" - No, you want it.`,
+**Essential Needs:**
+- Shelter (rent, mortgage, or housing costs)
+- Food (groceries, not dining out)
+- Utilities (electricity, water, heating)
+- Healthcare (insurance, medications, essential care)
+- Transportation to work (public transport, essential car costs)
+- Basic clothing appropriate for work and weather
+
+The key question: "Could I survive and maintain my job without this?" If no, it's a need.
+
+## What Are Wants?
+
+Wants are things that enhance your quality of life but aren't strictly necessary for survival. They make life more enjoyable, comfortable, or convenient:
+
+**Common Wants:**
+- Entertainment subscriptions (Netflix, Spotify, gaming)
+- Dining out and takeaways
+- The latest smartphone (vs. a basic functional phone)
+- Designer or brand-name clothing
+- Gym memberships (when free alternatives exist)
+- Holidays and travel
+- Hobbies and recreational activities
+
+Wants aren't bad - they're an important part of a balanced life! The key is being honest about what category each expense falls into.
+
+## The Grey Area: Where It Gets Tricky
+
+Many expenses blur the line between needs and wants:
+
+**Internet at home:** Need if you work remotely, want if purely for entertainment
+**A car:** Need in rural areas with no public transport, want in cities with good transit
+**Coffee:** A want (you don't need the coffee shop), but caffeine can feel like a need!
+
+The context matters. Be honest with yourself about what's truly necessary versus what's convenient.
+
+## Practical Framework: The 48-Hour Rule
+
+When you're unsure if something is a need or want, try this:
+- Wait 48 hours before purchasing
+- If you still feel strongly it's necessary after 48 hours, it might be closer to a need
+- Many "urgent needs" fade away when given time to reflect
+
+## Wants in Disguise
+
+Watch out for these common scenarios where wants pretend to be needs:
+- "I NEED to upgrade my phone" (when your current one works fine)
+- "I NEED this gym membership" (when you could exercise for free)
+- "I NEED to eat out tonight" (when you have food at home)
+
+The language of urgency ("I need it NOW!") is often a sign of an emotional want, not a true need.`,
     questions: [
       {
         id: 'mf-3-q1',
