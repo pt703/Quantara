@@ -55,15 +55,15 @@ function SkillBar({ domain, correct, total, color }: SkillBarProps) {
   // Format domain name for display
   const displayName = domain.charAt(0).toUpperCase() + domain.slice(1);
   
-  // Calculate percentage for progress bar
-  const percentage = total > 0 ? (correct / total) * 100 : 0;
+  // Calculate percentage for progress bar and display
+  const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
   
   return (
     <View style={styles.skillBarContainer}>
       <View style={styles.skillBarHeader}>
         <ThemedText style={styles.skillName}>{displayName}</ThemedText>
         <ThemedText style={[styles.skillLevel, { color: theme.textSecondary }]}>
-          {correct}/{total}
+          {percentage}%
         </ThemedText>
       </View>
       <View style={[styles.skillBarBg, { backgroundColor: theme.border }]}>
@@ -157,16 +157,16 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Hearts</ThemedText>
         </View>
 
-        {/* Streak - Fire emoji */}
+        {/* Streak - Flame icon (hollow style) */}
         <View style={styles.statItem}>
-          <ThemedText style={styles.emojiIcon}>🔥</ThemedText>
+          <Feather name="sun" size={20} color="#F59E0B" />
           <ThemedText style={styles.statValue}>{streak}</ThemedText>
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Day Streak</ThemedText>
         </View>
 
-        {/* XP Today - Lightning icon */}
+        {/* XP Today - Zap icon (hollow style) */}
         <View style={styles.statItem}>
-          <ThemedText style={styles.emojiIcon}>⚡</ThemedText>
+          <Feather name="zap" size={20} color="#EAB308" />
           <ThemedText style={styles.statValue}>{todayXP}</ThemedText>
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>XP today</ThemedText>
         </View>
@@ -336,9 +336,6 @@ const styles = StyleSheet.create({
   statLabel: {
     ...Typography.caption,
     marginTop: 2,
-  },
-  emojiIcon: {
-    fontSize: 20,
   },
   sectionHeader: {
     paddingHorizontal: Spacing.lg,

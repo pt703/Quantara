@@ -56,6 +56,7 @@ import { useModuleProgress } from '@/hooks/useModuleProgress';
 import { useGamification } from '@/hooks/useGamification';
 import { useWrongAnswerRegistry } from '@/hooks/useWrongAnswerRegistry';
 import { useSkillAccuracy } from '@/hooks/useSkillAccuracy';
+import { useAdaptiveLearning } from '@/hooks/useAdaptiveLearning';
 import { Spacing, BorderRadius, Typography } from '@/constants/theme';
 import { QuizModule, Question, ConceptVariant, AdaptiveQuizState, ConceptResult, SkillDomain } from '../types';
 import { LearnStackParamList } from '../navigation/LearnStackNavigator';
@@ -91,9 +92,10 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   const insets = useSafeAreaInsets();
   
   const { recordQuizAttempt, getModuleProgress } = useModuleProgress();
-  const { hearts, loseHeart, gainXP, addHearts } = useGamification();
+  const { hearts, loseHeart, gainXP, addHearts, streak } = useGamification();
   const { registerWrongAnswer, markRemediated } = useWrongAnswerRegistry();
   const { recordQuizResult } = useSkillAccuracy();
+  const { recordLessonAttempt } = useAdaptiveLearning(streak);
   
   // Get module data from route params
   const module = route.params.module as QuizModule | undefined;
@@ -492,7 +494,11 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       // QUIZ COMPLETE - All concepts mastered
       // =================================================================
       const score = Math.round((totalCorrect / totalAttempts) * 100);
+      const accuracy = totalCorrect / totalAttempts;
       recordQuizAttempt(moduleId, score, module?.masteryThreshold);
+      
+      // Mark lesson as complete in adaptive learning system for course progress
+      recordLessonAttempt(lessonId, accuracy, totalAttempts * 30, true, false);
       
       // Award +5 hearts for completing the quiz
       addHearts(5);
@@ -517,7 +523,11 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       // Edge case: Reached end but not all mastered
       // This shouldn't happen with proper cascade logic, but handle gracefully
       const score = Math.round((totalCorrect / totalAttempts) * 100);
+      const accuracy = totalCorrect / totalAttempts;
       recordQuizAttempt(moduleId, score, module?.masteryThreshold);
+      
+      // Mark lesson as complete even if not all mastered
+      recordLessonAttempt(lessonId, accuracy, totalAttempts * 30, true, false);
       
       // Still award hearts for completing
       addHearts(5);
@@ -534,7 +544,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       setCurrentIndex(prev => prev + 1);
     }
   }, [currentIndex, questionQueue, module, masteredConcepts, totalCorrect, totalAttempts, 
-      moduleId, recordQuizAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult]);
+      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult]);
 
   // Handle completion dismiss
   const handleCompletionClose = useCallback(() => {
