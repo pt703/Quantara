@@ -9,6 +9,7 @@ import SubscriptionManagerScreen from "@/screens/SubscriptionManagerScreen";
 import DebtTrackerScreen from "@/screens/DebtTrackerScreen";
 import PortfolioTrackerScreen from "@/screens/PortfolioTrackerScreen";
 import NotificationSettingsScreen from "@/screens/NotificationSettingsScreen";
+import AISettingsScreen from "@/screens/AISettingsScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { getCommonScreenOptions } from "@/navigation/screenOptions";
 
@@ -21,6 +22,7 @@ export type ProfileStackParamList = {
   DebtTracker: undefined;
   PortfolioTracker: undefined;
   NotificationSettings: undefined;
+  AISettings: undefined;
 };
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -84,6 +86,13 @@ export default function ProfileStackNavigator() {
         component={NotificationSettingsScreen}
         options={{
           title: "Notifications",
+        }}
+      />
+      <Stack.Screen
+        name="AISettings"
+        component={AISettingsScreen}
+        options={{
+          title: "AI Features",
         }}
       />
     </Stack.Navigator>
