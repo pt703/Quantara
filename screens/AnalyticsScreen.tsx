@@ -229,7 +229,7 @@ export default function AnalyticsScreen() {
               </ThemedText>
             </View>
             <Spacer height={Spacing.sm} />
-            <ProgressBar progress={item.avgScore} />
+            <ProgressBar progress={item.avgScore / 100} />
             <View style={styles.domainStats}>
               <ThemedText style={[styles.domainStat, { color: theme.textSecondary }]}>
                 {item.attempts} attempts
@@ -260,7 +260,7 @@ export default function AnalyticsScreen() {
             </ThemedText>
           </View>
           <Spacer height={Spacing.sm} />
-          <ProgressBar progress={(stats.completedLessons / stats.totalLessons) * 100} />
+          <ProgressBar progress={stats.completedLessons / stats.totalLessons} />
         </View>
 
         <Spacer height={Spacing.lg} />
@@ -301,7 +301,7 @@ export default function AnalyticsScreen() {
                 </ThemedText>
               </View>
               <Spacer height={Spacing.sm} />
-              <ProgressBar progress={progress} />
+              <ProgressBar progress={progress / 100} />
               <Spacer height={Spacing.md} />
             </View>
           );
