@@ -62,6 +62,8 @@ import { QuizModule, Question, ConceptVariant, AdaptiveQuizState, ConceptResult,
 import { LearnStackParamList } from '../navigation/LearnStackNavigator';
 import { getConceptForQuestion, getVariantQuestions } from '../mock/conceptTags';
 import { getQuestionById, getLessonById } from '../mock/courses';
+import { Confetti } from '@/components/Confetti';
+import * as Haptics from '@/utils/haptics';
 
 // =============================================================================
 // TYPES
@@ -300,6 +302,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       // =================================================================
       // CORRECT ANSWER
       // =================================================================
+      Haptics.correctAnswer();
       setTotalCorrect(prev => prev + 1);
       
       // Award XP - reduced for penalty questions to incentivize first-try success
@@ -308,6 +311,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         : result.xpEarned;                    // Full XP for initial hard test
       setXpEarned(prev => prev + xpAmount);
       gainXP(xpAmount);
+      Haptics.xpEarned();
       
       // Animate XP gain
       xpScale.value = withSequence(
@@ -344,6 +348,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       // =================================================================
       // WRONG ANSWER
       // =================================================================
+      Haptics.wrongAnswer();
       loseHeart();
       setHeartsLost(prev => prev + 1);
       
@@ -513,6 +518,10 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       const isPerfect = score === 100;
       recordLessonComplete(isPerfect);
       
+      // Haptic celebration!
+      Haptics.quizComplete();
+      Haptics.heartsEarned();
+      
       // Log final results for research
       console.log('[ADAPTIVE QUIZ COMPLETE]', {
         conceptsTeached: module?.conceptVariants?.length || 0,
@@ -544,6 +553,10 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       
       // Update streak - lesson/quiz completed!
       recordLessonComplete(score === 100);
+      
+      // Haptic celebration!
+      Haptics.quizComplete();
+      Haptics.heartsEarned();
       
       setShowCompletion(true);
     } else {
@@ -749,6 +762,9 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         animationType="fade"
         transparent={true}
       >
+        {/* Confetti celebration */}
+        <Confetti visible={showCompletion} count={60} />
+        
         <View style={styles.modalOverlay}>
           <View style={[styles.completionModal, { backgroundColor: theme.card }]}>
             {/* Celebration icon */}
