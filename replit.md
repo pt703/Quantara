@@ -50,6 +50,16 @@ Preferred communication style: Simple, everyday language.
     - Settings persisted to AsyncStorage with Android notification channels
     - Web platform shows informational notice (notifications require mobile device)
   - `useAuth`: Supabase authentication with sign up, login, logout, password reset
+  - `useAIQuestions`: AI-powered personalized question generation using Google Gemini
+    - Generates questions based on user's financial snapshot data
+    - Supports MCQ, true/false, calculation, and scenario question types
+    - Personalized insights and tips based on user's financial situation
+
+**AI Integration**:
+- Google Gemini API client in `lib/gemini.ts`
+- AI question service in `services/aiQuestionService.ts`
+- Personalized quiz questions based on user's actual financial data
+- Environment variable required: `EXPO_PUBLIC_GEMINI_API_KEY`
 
 **Authentication**:
 - Supabase client configured in `lib/supabase.ts` with AsyncStorage for session persistence
@@ -141,6 +151,9 @@ Preferred communication style: Simple, everyday language.
 ## Storage & Data
 - **@react-native-async-storage/async-storage**: Persistent key-value storage for user data, progress, and settings
 - **@supabase/supabase-js**: Supabase client for authentication and future backend integration
+
+## AI Integration
+- **@google/generative-ai**: Google Gemini API client for personalized question generation
 
 ## Notifications
 - **expo-notifications**: Local and push notifications system
