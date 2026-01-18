@@ -157,6 +157,8 @@ export function useNotifications() {
   }, []);
 
   const scheduleDailyReminder = useCallback(async (hour: number, minute: number) => {
+    if (Platform.OS === 'web') return;
+    
     await cancelNotificationsByType('daily_reminder');
 
     if (!settings.dailyReminders) return;
@@ -180,6 +182,7 @@ export function useNotifications() {
     challengeTitle: string,
     delayHours: number = 24
   ) => {
+    if (Platform.OS === 'web') return;
     if (!settings.challengeReminders) return;
 
     const identifier = `challenge_${challengeId}`;
@@ -202,6 +205,7 @@ export function useNotifications() {
   }, [settings.challengeReminders]);
 
   const cancelChallengeReminder = useCallback(async (challengeId: string) => {
+    if (Platform.OS === 'web') return;
     const identifier = `challenge_${challengeId}`;
     await Notifications.cancelScheduledNotificationAsync(identifier).catch(() => {});
   }, []);
@@ -217,6 +221,7 @@ export function useNotifications() {
   }, [settings.challengeReminders, scheduleChallengeReminder]);
 
   const sendNewContentNotification = useCallback(async (contentType: 'lesson' | 'challenge', title: string) => {
+    if (Platform.OS === 'web') return;
     if (!settings.newContentAlerts) return;
 
     const body = contentType === 'lesson' 
@@ -234,6 +239,7 @@ export function useNotifications() {
   }, [settings.newContentAlerts]);
 
   const sendAchievementNotification = useCallback(async (title: string, body: string) => {
+    if (Platform.OS === 'web') return;
     if (!settings.achievementAlerts) return;
 
     await Notifications.scheduleNotificationAsync({
@@ -247,6 +253,7 @@ export function useNotifications() {
   }, [settings.achievementAlerts]);
 
   const sendWeeklyProgressNotification = useCallback(async (lessonsCompleted: number, streak: number) => {
+    if (Platform.OS === 'web') return;
     if (!settings.weeklyProgress) return;
 
     await Notifications.scheduleNotificationAsync({
@@ -260,6 +267,7 @@ export function useNotifications() {
   }, [settings.weeklyProgress]);
 
   const sendChallengeCompletedNotification = useCallback(async (challengeTitle: string) => {
+    if (Platform.OS === 'web') return;
     if (!settings.achievementAlerts) return;
 
     await Notifications.scheduleNotificationAsync({
@@ -273,6 +281,7 @@ export function useNotifications() {
   }, [settings.achievementAlerts]);
 
   const cancelNotificationsByType = async (type: string) => {
+    if (Platform.OS === 'web') return;
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     for (const notification of scheduled) {
       if (notification.content.data?.type === type) {
@@ -282,10 +291,12 @@ export function useNotifications() {
   };
 
   const cancelAllNotifications = useCallback(async () => {
+    if (Platform.OS === 'web') return;
     await Notifications.cancelAllScheduledNotificationsAsync();
   }, []);
 
   const getScheduledNotifications = useCallback(async () => {
+    if (Platform.OS === 'web') return [];
     return await Notifications.getAllScheduledNotificationsAsync();
   }, []);
 
@@ -293,6 +304,8 @@ export function useNotifications() {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
     await saveSettings(updated);
+
+    if (Platform.OS === 'web') return;
 
     if (newSettings.dailyReminders === false) {
       await cancelNotificationsByType('daily_reminder');
