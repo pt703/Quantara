@@ -20,7 +20,7 @@ export function ProgressBar({ progress, height = 6, color }: ProgressBarProps) {
       style={[
         styles.container,
         {
-          backgroundColor: theme.surface,
+          backgroundColor: theme.border,
           height,
           borderRadius: height / 2,
         },

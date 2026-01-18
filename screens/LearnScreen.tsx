@@ -14,7 +14,7 @@ import React, { useMemo, useCallback } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { ScreenScrollView } from '@/components/ScreenScrollView';
@@ -159,7 +159,7 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
 
         {/* Streak - Flame icon (hollow style) */}
         <View style={styles.statItem}>
-          <Feather name="sun" size={20} color="#F59E0B" />
+          <Ionicons name="flame-outline" size={22} color="#F97316" />
           <ThemedText style={styles.statValue}>{streak}</ThemedText>
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Day Streak</ThemedText>
         </View>
@@ -289,7 +289,7 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
               <View style={styles.courseProgress}>
                 <View style={{ flex: 1, marginRight: Spacing.md }}>
                   <ProgressBar 
-                    progress={course.progress.percentage} 
+                    progress={course.progress.percentage / 100} 
                     color={course.color}
                     height={6}
                   />
