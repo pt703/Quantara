@@ -47,6 +47,8 @@ import { Spacing, BorderRadius, Typography } from '@/constants/theme';
 import { Question, Lesson, Course } from '../types';
 import { getLessonById } from '../mock/courses';
 import { LearnStackParamList } from '../navigation/LearnStackNavigator';
+import { Confetti } from '@/components/Confetti';
+import * as Haptics from '@/utils/haptics';
 
 // =============================================================================
 // TYPES
@@ -213,10 +215,13 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
 
     // Handle correct answer
     if (result.isCorrect) {
+      Haptics.correctAnswer();
+      
       // Add XP with animation (reduced XP for repeated questions)
       // Repeat questions award 50% XP as per Duolingo-style design
       const xpAmount = isRepeatQuestion ? Math.round(result.xpEarned * 0.5) : result.xpEarned;
       setXpEarned(prev => prev + xpAmount);
+      Haptics.xpEarned();
       xpScale.value = withSequence(
         withTiming(1.3, { duration: 150 }),
         withSpring(1)
@@ -229,6 +234,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
       }));
     } else {
       // Lose a heart on wrong answer
+      Haptics.wrongAnswer();
       loseHeart();
       setHeartsLost(prev => prev + 1);
       
@@ -280,6 +286,9 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
 
     // Record for achievements
     recordLessonComplete(isPerfect);
+
+    // Haptic celebration!
+    Haptics.quizComplete();
 
     // Show completion modal
     setShowCompletion(true);
@@ -545,6 +554,9 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
         animationType="fade"
         transparent={true}
       >
+        {/* Confetti celebration */}
+        <Confetti visible={showCompletion} count={60} />
+        
         <View style={styles.modalOverlay}>
           <View style={[styles.completionModal, { backgroundColor: theme.card }]}>
             {/* Celebration icon */}
