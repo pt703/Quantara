@@ -15,7 +15,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { View, StyleSheet, Pressable, FlatList } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RouteProp } from '@react-navigation/native';
+import { RouteProp, useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
@@ -224,7 +224,13 @@ export default function CourseDetailScreen({ navigation, route }: CourseDetailSc
   const insets = useSafeAreaInsets();
   
   const course = useMemo(() => getCourseById(courseId), [courseId]);
-  const { moduleProgress, getLessonProgress, isLessonComplete } = useModuleProgress();
+  const { moduleProgress, getLessonProgress, isLessonComplete, reload } = useModuleProgress();
+  
+  useFocusEffect(
+    useCallback(() => {
+      reload();
+    }, [reload])
+  );
   
   const courseProgress = useMemo(() => {
     if (!course) return 0;

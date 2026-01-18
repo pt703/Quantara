@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { ScreenScrollView } from '@/components/ScreenScrollView';
+import { MarkdownText } from '@/components/MarkdownText';
 import Spacer from '@/components/Spacer';
 import { Spacing, Typography, BorderRadius } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
@@ -253,58 +254,12 @@ export default function LessonScreen() {
     );
   }
 
-  const contentLines = lesson.content?.split('\n') || [];
-
   return (
     <ScreenScrollView>
       <Spacer height={Spacing.md} />
 
       <View style={styles.lessonContent}>
-        {contentLines.map((line, index) => {
-          if (line.startsWith('# ')) {
-            return (
-              <React.Fragment key={index}>
-                <ThemedText style={styles.heading1}>{line.substring(2)}</ThemedText>
-                <Spacer height={Spacing.lg} />
-              </React.Fragment>
-            );
-          } else if (line.startsWith('## ')) {
-            return (
-              <React.Fragment key={index}>
-                <ThemedText style={styles.heading2}>{line.substring(3)}</ThemedText>
-                <Spacer height={Spacing.md} />
-              </React.Fragment>
-            );
-          } else if (line.startsWith('**') && line.endsWith('**')) {
-            return (
-              <React.Fragment key={index}>
-                <ThemedText style={styles.bold}>
-                  {line.substring(2, line.length - 2)}
-                </ThemedText>
-                <Spacer height={Spacing.sm} />
-              </React.Fragment>
-            );
-          } else if (line.startsWith('- ')) {
-            return (
-              <React.Fragment key={index}>
-                <View style={styles.bulletPoint}>
-                  <ThemedText style={styles.bullet}>{'\u2022'}</ThemedText>
-                  <ThemedText style={styles.bulletText}>{line.substring(2)}</ThemedText>
-                </View>
-                <Spacer height={Spacing.sm} />
-              </React.Fragment>
-            );
-          } else if (line.trim() === '') {
-            return <Spacer key={index} height={Spacing.md} />;
-          } else {
-            return (
-              <React.Fragment key={index}>
-                <ThemedText style={styles.paragraph}>{line}</ThemedText>
-                <Spacer height={Spacing.md} />
-              </React.Fragment>
-            );
-          }
-        })}
+        <MarkdownText content={lesson.content || ''} />
       </View>
 
       <Spacer height={Spacing.xl} />

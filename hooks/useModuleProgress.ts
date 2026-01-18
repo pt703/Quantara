@@ -62,6 +62,9 @@ export interface UseModuleProgressReturn {
   
   // Clear all progress (for testing/reset)
   clearAllProgress: () => void;
+  
+  // Reload progress from storage (for reactivity on screen focus)
+  reload: () => Promise<void>;
 }
 
 export function useModuleProgress(): UseModuleProgressReturn {
@@ -262,5 +265,6 @@ export function useModuleProgress(): UseModuleProgressReturn {
     isLessonComplete,
     resetModuleProgress,
     clearAllProgress,
+    reload: loadProgress,
   };
 }
