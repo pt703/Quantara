@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { View, StyleSheet, Dimensions } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
@@ -152,19 +152,19 @@ export default function AnalyticsScreen() {
         <Spacer height={Spacing.lg} />
         
         <View style={styles.streakRow}>
-          <View style={[styles.streakCard, { backgroundColor: theme.primary + "15" }]}>
-            <Feather name="zap" size={24} color={theme.primary} />
-            <ThemedText style={[styles.streakValue, { color: theme.primary }]}>{streak}</ThemedText>
+          <View style={[styles.streakCard, { backgroundColor: "#F9731615" }]}>
+            <Ionicons name="flame-outline" size={24} color="#F97316" />
+            <ThemedText style={[styles.streakValue, { color: "#F97316" }]}>{streak}</ThemedText>
             <ThemedText style={[styles.streakLabel, { color: theme.textSecondary }]}>Current</ThemedText>
           </View>
-          <View style={[styles.streakCard, { backgroundColor: theme.success + "15" }]}>
-            <Feather name="award" size={24} color={theme.success} />
-            <ThemedText style={[styles.streakValue, { color: theme.success }]}>{longestStreak}</ThemedText>
-            <ThemedText style={[styles.streakLabel, { color: theme.textSecondary }]}>Longest</ThemedText>
+          <View style={[styles.streakCard, { backgroundColor: "#F9731615" }]}>
+            <Ionicons name="flame-outline" size={24} color="#F97316" />
+            <ThemedText style={[styles.streakValue, { color: "#F97316" }]}>{longestStreak}</ThemedText>
+            <ThemedText style={[styles.streakLabel, { color: theme.textSecondary }]}>Highest</ThemedText>
           </View>
           <View style={[styles.streakCard, { backgroundColor: theme.warning + "15" }]}>
-            <Feather name="star" size={24} color={theme.warning} />
-            <ThemedText style={[styles.streakValue, { color: theme.warning }]}>{xp}</ThemedText>
+            <Feather name="zap" size={24} color="#EAB308" />
+            <ThemedText style={[styles.streakValue, { color: "#EAB308" }]}>{xp}</ThemedText>
             <ThemedText style={[styles.streakLabel, { color: theme.textSecondary }]}>Total XP</ThemedText>
           </View>
         </View>

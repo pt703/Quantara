@@ -45,6 +45,7 @@ const DEFAULT_GAMIFICATION_STATE: GamificationState = {
   streak: 0,                   // No streak yet - first lesson brings it to 1
   longestStreak: 0,            // Best streak ever achieved
   lastActiveDate: '',          // Will be set on first activity
+  lastActivityTimestamp: '',   // Full ISO timestamp of last lesson completion
   heartsLastRefilled: new Date().toISOString(),
   activeDays: [],              // Dates when user was active
 };
@@ -426,42 +427,37 @@ export function useGamification() {
   // ==========================================================================
 
   /**
-   * Updates the streak based on today's activity.
-   * Call this when user completes a lesson.
+   * Updates the streak based on lesson completion.
+   * Call this when user completes a lesson/quiz.
    * 
-   * STREAK MECHANICS:
-   * - First ever lesson: streak goes from 0 to 1
-   * - If same day as last lesson: no change (already counted)
-   * - If last lesson was yesterday: increment streak (consecutive day)
-   * - If more than 24 hours since last lesson: reset streak to 1
+   * STREAK MECHANICS (24-hour based):
+   * - First ever lesson: streak starts at 1
+   * - If completed within 24 hours of last activity: increment streak by 1
+   * - If more than 24 hours since last activity: streak resets to 1
    * 
    * Streak requires completing at least one lesson every 24 hours to maintain.
    */
   const updateStreak = useCallback((): void => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
-
-    // If already active today, no change needed
-    if (state.lastActiveDate === todayStr) {
-      return;
-    }
+    const now = new Date();
+    const nowTimestamp = now.toISOString();
+    const todayStr = nowTimestamp.split('T')[0]; // YYYY-MM-DD for activeDays
 
     let newStreak: number;
+    const lastTimestamp = state.lastActivityTimestamp || state.lastActiveDate;
 
-    if (!state.lastActiveDate) {
+    if (!lastTimestamp) {
       // First ever lesson - streak starts at 1
       newStreak = 1;
     } else {
-      const lastActive = new Date(state.lastActiveDate);
+      // Check if within 24 hours of last activity
+      const lastActive = new Date(lastTimestamp);
+      const hoursSinceLastActivity = (now.getTime() - lastActive.getTime()) / (1000 * 60 * 60);
       
-      if (isYesterday(lastActive, today)) {
-        // Consecutive day - increment streak!
+      if (hoursSinceLastActivity <= 24) {
+        // Within 24 hours - increment streak
         newStreak = state.streak + 1;
-      } else if (isSameDay(lastActive, today)) {
-        // Same day, shouldn't reach here but keep streak
-        newStreak = state.streak;
       } else {
-        // More than 1 day gap - streak resets to 1 (not 0, since they're doing a lesson now)
+        // More than 24 hours - streak resets to 1 (since they're completing a lesson now)
         newStreak = 1;
       }
     }
@@ -480,6 +476,7 @@ export function useGamification() {
       streak: newStreak,
       longestStreak: newLongestStreak,
       lastActiveDate: todayStr,
+      lastActivityTimestamp: nowTimestamp,
       activeDays: newActiveDays,
     };
 
@@ -493,11 +490,26 @@ export function useGamification() {
    * Used for display purposes to show the user their streak status.
    */
   const isStreakExpired = useCallback((): boolean => {
-    if (!state.lastActiveDate || state.streak === 0) {
+    if (state.streak === 0) {
       return false; // No streak to expire
     }
-    return !isWithin24Hours(state.lastActiveDate);
-  }, [state.lastActiveDate, state.streak]);
+    const lastTimestamp = state.lastActivityTimestamp || state.lastActiveDate;
+    if (!lastTimestamp) {
+      return false;
+    }
+    return !isWithin24Hours(lastTimestamp);
+  }, [state.lastActivityTimestamp, state.lastActiveDate, state.streak]);
+  
+  /**
+   * Gets the current streak, accounting for expiry.
+   * If more than 24 hours have passed, returns 0.
+   */
+  const getCurrentStreak = useCallback((): number => {
+    if (isStreakExpired()) {
+      return 0;
+    }
+    return state.streak;
+  }, [isStreakExpired, state.streak]);
 
   // ==========================================================================
   // ACHIEVEMENT MANAGEMENT
@@ -636,6 +648,9 @@ export function useGamification() {
   const todayStr = new Date().toISOString().split('T')[0];
   const todayXP = state.todayXPDate === todayStr ? (state.todayXP || 0) : 0;
 
+  // Get the effective streak (accounts for 24-hour expiry)
+  const effectiveStreak = getCurrentStreak();
+
   return {
     // Current state
     hearts: state.hearts,
@@ -643,9 +658,11 @@ export function useGamification() {
     xp: state.xp,
     todayXP,
     level: state.level,
-    streak: state.streak,
+    streak: effectiveStreak,           // Returns 0 if expired, otherwise current streak
+    rawStreak: state.streak,           // Raw stored streak value (for debugging)
     longestStreak: state.longestStreak || 0,
     lastActiveDate: state.lastActiveDate,
+    lastActivityTimestamp: state.lastActivityTimestamp || '',
     activeDays: state.activeDays || [],
     isLoading,
 
@@ -667,6 +684,7 @@ export function useGamification() {
     // Streak actions
     updateStreak,
     isStreakExpired,
+    getCurrentStreak,
 
     // Lesson/Course tracking
     recordLessonComplete,

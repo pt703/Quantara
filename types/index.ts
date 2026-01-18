@@ -369,7 +369,8 @@ export interface GamificationState {
   level: number;                 // Current level (calculated from XP)
   streak: number;                // Current day streak
   longestStreak: number;         // Best streak ever achieved
-  lastActiveDate: string;        // ISO date of last activity
+  lastActiveDate: string;        // ISO date of last activity (YYYY-MM-DD)
+  lastActivityTimestamp: string; // Full ISO timestamp of last lesson completion
   heartsLastRefilled: string;    // ISO timestamp of last heart refill
   activeDays: string[];          // Array of YYYY-MM-DD dates when user was active
 }
