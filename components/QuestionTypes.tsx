@@ -964,6 +964,16 @@ export function CalculationQuestionComponent({
   const [userInput, setUserInput] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const { theme } = useTheme();
+  
+  // Check if problemText is just a simple formula (e.g., "$3,000 - $2,400 = ?")
+  // These don't add value since the question already states the numbers
+  const isSimpleFormula = useMemo(() => {
+    if (!question.problemText) return true;
+    const text = question.problemText.trim();
+    // Skip if it's just "X op Y = ?" format
+    const simpleFormulaPattern = /^\$?[\d,]+\s*[+\-×x\*\/]\s*\$?[\d,]+%?\s*=\s*\?$/i;
+    return simpleFormulaPattern.test(text);
+  }, [question.problemText]);
 
   const handleSubmit = useCallback(() => {
     if (disabled || !userInput.trim()) return;
@@ -1004,14 +1014,17 @@ export function CalculationQuestionComponent({
 
       <Spacer height={Spacing.lg} />
 
-      {/* Problem display */}
-      <View style={[styles.calculationBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <ThemedText style={[styles.calculationText, { color: theme.text }]}>
-          {question.problemText}
-        </ThemedText>
-      </View>
-
-      <Spacer height={Spacing.lg} />
+      {/* Problem display - only show if it adds value (not just a simple formula) */}
+      {!isSimpleFormula && question.problemText && (
+        <>
+          <View style={[styles.calculationBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <ThemedText style={[styles.calculationText, { color: theme.text }]}>
+              {question.problemText}
+            </ThemedText>
+          </View>
+          <Spacer height={Spacing.lg} />
+        </>
+      )}
 
       {/* Answer input */}
       <View style={styles.calculationInputContainer}>
