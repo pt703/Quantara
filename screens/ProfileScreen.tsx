@@ -27,7 +27,9 @@ import { Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useUserData } from "@/hooks/useUserData";
 import { useAuthContext } from "@/context/AuthContext";
+import { useBadges } from "@/hooks/useBadges";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
+import { Badge } from "@/mock/badges";
 
 // =============================================================================
 // TYPES
@@ -45,6 +47,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { theme } = useTheme();
   const { profile, financial } = useUserData();
   const { signOut, user } = useAuthContext();
+  const { unlockedBadges, allBadges, isBadgeUnlocked, stats } = useBadges();
 
   // Handle sign out with error handling
   const handleSignOut = async () => {
@@ -88,6 +91,62 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       </View>
 
       <Spacer height={Spacing.xl} />
+
+      {/* ================================================================== */}
+      {/* ACHIEVEMENTS / BADGES */}
+      {/* ================================================================== */}
+      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.cardHeader}>
+          <ThemedText style={styles.cardTitle}>Achievements</ThemedText>
+          <ThemedText style={[styles.badgeCount, { color: theme.primary }]}>
+            {unlockedBadges.length}/{allBadges.length}
+          </ThemedText>
+        </View>
+
+        <Spacer height={Spacing.lg} />
+
+        <View style={styles.badgeGrid}>
+          {allBadges.slice(0, 8).map((badge: Badge) => {
+            const isUnlocked = isBadgeUnlocked(badge.id);
+            return (
+              <View 
+                key={badge.id} 
+                style={[
+                  styles.badgeItem,
+                  { backgroundColor: isUnlocked ? theme.primary + '15' : theme.border + '40' }
+                ]}
+              >
+                <Feather 
+                  name={badge.icon as any} 
+                  size={24} 
+                  color={isUnlocked ? theme.primary : theme.textSecondary + '60'} 
+                />
+                <Spacer height={Spacing.xs} />
+                <ThemedText 
+                  style={[
+                    styles.badgeName, 
+                    { color: isUnlocked ? theme.text : theme.textSecondary + '80' }
+                  ]}
+                  numberOfLines={1}
+                >
+                  {badge.name}
+                </ThemedText>
+              </View>
+            );
+          })}
+        </View>
+
+        {allBadges.length > 8 ? (
+          <>
+            <Spacer height={Spacing.md} />
+            <ThemedText style={[styles.moreBadges, { color: theme.textSecondary }]}>
+              +{allBadges.length - 8} more badges to unlock
+            </ThemedText>
+          </>
+        ) : null}
+      </ThemedView>
+
+      <Spacer height={Spacing.lg} />
 
       {/* ================================================================== */}
       {/* FINANCIAL OVERVIEW - Income, Expenses, Debt, Savings */}
@@ -433,6 +492,32 @@ const styles = StyleSheet.create({
   },
   tapToEdit: {
     ...Typography.caption,
+    textAlign: 'center',
+  },
+  badgeCount: {
+    ...Typography.headline,
+    fontWeight: '600',
+  },
+  badgeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  badgeItem: {
+    width: '22%',
+    aspectRatio: 1,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xs,
+  },
+  badgeName: {
+    ...Typography.caption,
+    textAlign: 'center',
+    fontSize: 10,
+  },
+  moreBadges: {
+    ...Typography.footnote,
     textAlign: 'center',
   },
 });

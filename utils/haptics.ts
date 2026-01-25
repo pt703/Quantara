@@ -139,3 +139,21 @@ export function wrongAnswer() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
   }
 }
+
+/**
+ * Achievement unlocked - celebratory triple tap pattern
+ */
+export function achievement() {
+  if (isHapticsSupported) {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setTimeout(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    }, 100);
+    setTimeout(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }, 200);
+    setTimeout(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    }, 300);
+  }
+}
