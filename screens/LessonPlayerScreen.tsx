@@ -49,6 +49,7 @@ import { getLessonById } from '../mock/courses';
 import { LearnStackParamList } from '../navigation/LearnStackNavigator';
 import { Confetti } from '@/components/Confetti';
 import * as Haptics from '@/utils/haptics';
+import { generateSimilarQuestion, canGenerateAIQuestions } from '@/services/aiQuestionService';
 
 // =============================================================================
 // TYPES
@@ -134,6 +135,13 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
   // Track first-attempt results for accurate skill calculation
   // Key: question.id, Value: true if correct on first try, false if wrong
   const [firstAttemptResults, setFirstAttemptResults] = useState<Record<string, boolean>>({});
+  
+  // Track pending AI-generated similar questions
+  // Key: queue index, Value: AI-generated question to use as replacement
+  const [aiReplacementQuestions, setAiReplacementQuestions] = useState<Record<number, Question>>({});
+  
+  // Track how many times each question has been attempted (for AI to make easier variants)
+  const [questionAttemptCounts, setQuestionAttemptCounts] = useState<Record<string, number>>({});
 
   // Animation values
   const progressWidth = useSharedValue(0);
@@ -148,7 +156,8 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
   const originalQuestions = lesson?.questions || [];
   
   // Current question from the dynamic queue
-  const currentQuestion = questionQueue[currentQuestionIndex];
+  // If an AI-generated replacement is available for this index, use it instead
+  const currentQuestion = aiReplacementQuestions[currentQuestionIndex] || questionQueue[currentQuestionIndex];
   
   // Original question count (used for progress calculation)
   const originalQuestionCount = originalQuestions.length;
@@ -238,11 +247,38 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
       loseHeart();
       setHeartsLost(prev => prev + 1);
       
-      // DUOLINGO-STYLE REPETITION: Add the question back to the queue
-      // The question will appear again later for the user to practice
-      // When it reappears, it will be detected as a repeat via attemptedQuestions
+      // Track attempt count for this question (for AI difficulty adjustment)
+      const attemptCount = (questionAttemptCounts[currentQuestion.id] || 0) + 1;
+      setQuestionAttemptCounts(prev => ({
+        ...prev,
+        [currentQuestion.id]: attemptCount,
+      }));
+      
+      // DUOLINGO-STYLE REPETITION: Add a question back to the queue
+      // If AI is available, generate a similar (but different) question
+      const newQueueIndex = questionQueue.length;
+      
+      // Immediately add original question as placeholder (for responsiveness)
       setQuestionQueue(prev => [...prev, currentQuestion]);
       setQuestionStates(prev => [...prev, 'unanswered']);
+      
+      // Try to generate an AI-powered similar question in the background
+      if (canGenerateAIQuestions()) {
+        generateSimilarQuestion(currentQuestion, attemptCount)
+          .then(aiQuestion => {
+            if (aiQuestion) {
+              console.log('[AI] Generated similar question:', aiQuestion.id);
+              // Store the AI question as a replacement for this queue position
+              setAiReplacementQuestions(prev => ({
+                ...prev,
+                [newQueueIndex]: aiQuestion,
+              }));
+            }
+          })
+          .catch(error => {
+            console.error('[AI] Failed to generate similar question:', error);
+          });
+      }
     }
 
     // Show explanation
@@ -253,7 +289,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     setTimeout(() => {
       setShowExplanation(true);
     }, 800);
-  }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale, isRepeatQuestion, attemptedQuestions]);
+  }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale, isRepeatQuestion, attemptedQuestions, questionQueue, questionAttemptCounts]);
 
   /**
    * Called when all questions are answered and mastered.

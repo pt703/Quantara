@@ -359,3 +359,119 @@ Respond with just the insight text, no JSON or formatting.
 export function canGenerateAIQuestions(): boolean {
   return isGeminiConfigured();
 }
+
+/**
+ * Generate a similar question based on an original question the user got wrong.
+ * This creates variety in the learning experience instead of repeating the exact same question.
+ */
+export async function generateSimilarQuestion(
+  originalQuestion: Question,
+  attemptNumber: number = 1
+): Promise<Question | null> {
+  if (!isGeminiConfigured()) {
+    console.log('Gemini not configured, returning null for similar question');
+    return null;
+  }
+
+  const typeDescriptions: Record<string, string> = {
+    'mcq': 'multiple choice with 4 options',
+    'true_false': 'true/false',
+    'calculation': 'calculation with a numerical answer',
+    'scenario': 'scenario-based decision',
+    'fill_blank': 'fill in the blank',
+  };
+
+  const prompt = `
+You are an expert financial literacy educator. A student got the following question wrong and needs a DIFFERENT but SIMILAR question to practice the same concept.
+
+ORIGINAL QUESTION:
+Type: ${originalQuestion.type}
+Question: ${originalQuestion.question}
+${originalQuestion.type === 'calculation' ? `Problem: ${(originalQuestion as CalculationQuestion).problemText}` : ''}
+${originalQuestion.type === 'mcq' ? `Options: ${(originalQuestion as MCQQuestion).options.join(', ')}` : ''}
+Explanation: ${originalQuestion.explanation}
+
+REQUIREMENTS:
+- Create a NEW question that tests the SAME concept but with DIFFERENT numbers/scenarios
+- Keep the same question type: ${typeDescriptions[originalQuestion.type] || originalQuestion.type}
+- Make it slightly ${attemptNumber > 1 ? 'easier' : 'similar in difficulty'}
+- Use different example numbers or scenarios
+- The question should feel fresh, not repetitive
+
+${originalQuestion.type === 'mcq' ? `
+Respond with JSON:
+\`\`\`json
+{
+  "type": "mcq",
+  "question": "A different but related question?",
+  "options": ["Option A", "Option B", "Option C", "Option D"],
+  "correctAnswer": 0,
+  "explanation": "Why this answer is correct"
+}
+\`\`\`` : ''}
+
+${originalQuestion.type === 'true_false' ? `
+Respond with JSON:
+\`\`\`json
+{
+  "type": "true_false",
+  "question": "A different statement about the same concept.",
+  "correctAnswer": true,
+  "explanation": "Why this is true/false"
+}
+\`\`\`` : ''}
+
+${originalQuestion.type === 'calculation' ? `
+Respond with JSON:
+\`\`\`json
+{
+  "type": "calculation",
+  "question": "A different calculation question about the same topic",
+  "problemText": "Show the setup naturally, not just a formula",
+  "correctAnswer": 500,
+  "unit": "$",
+  "explanation": "How to solve this"
+}
+\`\`\`` : ''}
+
+${originalQuestion.type === 'scenario' ? `
+Respond with JSON:
+\`\`\`json
+{
+  "type": "scenario",
+  "question": "What should you do?",
+  "scenario": "A different but related financial scenario",
+  "options": [
+    {"text": "Choice 1", "outcome": "Result", "impactScore": 50},
+    {"text": "Choice 2", "outcome": "Result", "impactScore": -30},
+    {"text": "Choice 3", "outcome": "Result", "impactScore": 100},
+    {"text": "Choice 4", "outcome": "Result", "impactScore": -50}
+  ],
+  "bestOptionIndex": 2,
+  "explanation": "Why this is the best choice"
+}
+\`\`\`` : ''}
+`;
+
+  try {
+    const generated = await generateJSON<GeneratedQuestion>(prompt);
+    if (!generated) {
+      console.error('Failed to generate similar question');
+      return null;
+    }
+
+    const questionId = `ai-similar-${originalQuestion.id}-${Date.now()}`;
+    
+    return formatQuestion(generated, {
+      id: questionId,
+      conceptId: originalQuestion.conceptId || 'general',
+      variantGroup: originalQuestion.variantGroup || `similar-${originalQuestion.id}`,
+      difficultyTier: originalQuestion.difficultyTier || 2,
+      difficulty: originalQuestion.difficulty || 'intermediate',
+      xpReward: Math.round(originalQuestion.xpReward * 0.75), // Slightly less XP for retry
+    });
+  } catch (error) {
+    console.error('Error generating similar question:', error);
+    return null;
+  }
+}
