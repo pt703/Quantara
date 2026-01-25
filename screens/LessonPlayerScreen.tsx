@@ -42,6 +42,7 @@ import Spacer from '@/components/Spacer';
 import { QuestionRenderer, QuestionResult } from '@/components/QuestionTypes';
 import { useTheme } from '@/hooks/useTheme';
 import { useGamification } from '@/hooks/useGamification';
+import { useBadges } from '@/hooks/useBadges';
 import { useAdaptiveLearning } from '@/hooks/useAdaptiveLearning';
 import { Spacing, BorderRadius, Typography } from '@/constants/theme';
 import { Question, Lesson, Course } from '../types';
@@ -85,6 +86,9 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     streak,
     streakMultiplier,
   } = useGamification();
+  
+  // Badge tracking hook
+  const { incrementLessonCount, incrementQuizCount, updateStreak, updateTotalXp } = useBadges();
   
   // Adaptive learning hook
   const { recordLessonAttempt } = useAdaptiveLearning(streak);
@@ -322,13 +326,19 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
 
     // Record for achievements
     recordLessonComplete(isPerfect);
+    
+    // Trigger badge checks
+    incrementLessonCount();
+    incrementQuizCount(isPerfect);
+    updateStreak(streak);
+    updateTotalXp(totalXP);
 
     // Haptic celebration!
     Haptics.quizComplete();
 
     // Show completion modal
     setShowCompletion(true);
-  }, [lesson, course, startTime, originalQuestionCount, questionQueue.length, xpEarned, gainXP, earnHeart, recordLessonAttempt, recordLessonComplete, lessonId, accuracy]);
+  }, [lesson, course, startTime, originalQuestionCount, questionQueue.length, xpEarned, gainXP, earnHeart, recordLessonAttempt, recordLessonComplete, lessonId, accuracy, incrementLessonCount, incrementQuizCount, updateStreak, updateTotalXp, streak]);
 
   /**
    * Called when user closes explanation and moves to next question.
