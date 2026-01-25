@@ -672,6 +672,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         {/* Question component */}
         {currentQuestion && (
           <QuestionRenderer
+            key={`${currentIndex}-${currentQuestion.id}`}
             question={currentQuestion}
             onAnswer={handleAnswer}
             disabled={isAnswered}

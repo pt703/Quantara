@@ -473,6 +473,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
         {/* Question component */}
         {currentQuestion && (
           <QuestionRenderer
+            key={`${currentQuestionIndex}-${currentQuestion.id}`}
             question={currentQuestion}
             onAnswer={handleAnswer}
             disabled={questionStates[currentQuestionIndex] !== 'unanswered'}
