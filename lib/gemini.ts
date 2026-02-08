@@ -89,7 +89,6 @@ async function executeRequest(prompt: string): Promise<string | null> {
       const status = error?.status;
       
       if (status === 429) {
-        lastRateLimitTime = Date.now();
         if (attempt < MAX_RETRIES) {
           const retryDelay = BASE_RETRY_DELAY_MS * Math.pow(2, attempt);
           console.log(`[Gemini] Rate limited, retrying in ${retryDelay / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})`);
@@ -97,6 +96,7 @@ async function executeRequest(prompt: string): Promise<string | null> {
           lastRequestTime = Date.now();
           continue;
         }
+        lastRateLimitTime = Date.now();
         console.log('[Gemini] Rate limited after all retries. Entering 60s cooldown.');
         return null;
       }
