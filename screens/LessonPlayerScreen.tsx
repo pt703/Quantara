@@ -296,7 +296,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
         difficulty: currentQuestion.difficulty || 'beginner',
         difficulty_tier: (currentQuestion as any).difficultyTier || null,
         is_correct: result.isCorrect,
-        response_time_ms: result.responseTimeMs || null,
+        response_time_ms: null,
         attempt_number: (questionAttemptCounts[currentQuestion.id] || 0) + 1,
         is_ai_generated: currentQuestion.id.startsWith('ai-'),
       }).catch(() => {});

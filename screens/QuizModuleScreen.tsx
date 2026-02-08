@@ -511,16 +511,44 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         }]);
       } else if (currentQueueItem.isInitialHardTest && conceptId && !module?.conceptVariants) {
         // =============================================================
-        // LEGACY MODE: Re-queue wrong answers for retry
+        // LEGACY MODE: Re-queue wrong answers with AI replacement attempt
         // =============================================================
-        // No penalty cascade for legacy quizzes, just add question back
-        setQuestionQueue(prev => [...prev, {
-          question: currentQuestion,
-          isPenalty: false,
-          conceptId,
-          difficultyTier: 3,
-          isInitialHardTest: true,
-        }]);
+        setQuestionQueue(prev => {
+          const newQueue: QueuedQuestion[] = [...prev, {
+            question: currentQuestion,
+            isPenalty: false,
+            conceptId,
+            difficultyTier: 3 as const,
+            isInitialHardTest: true,
+          }];
+
+          if (canGenerateAIQuestions()) {
+            const queueIdx = prev.length;
+            const userCtx = financial ? {
+              monthlyIncome: financial.monthlyIncome,
+              monthlyExpenses: financial.monthlyExpenses,
+              savingsGoal: financial.savingsGoal,
+              currentSavings: financial.currentSavings,
+              monthlyDebt: financial.totalDebt,
+            } : undefined;
+
+            generateConceptQuestion(
+              currentQuestion,
+              conceptId,
+              currentQuestion.question.substring(0, 50),
+              (lessonDomain || 'budgeting') as any,
+              currentQuestion.difficulty as any || 'intermediate',
+              userCtx
+            ).then(aiQ => {
+              if (aiQ) {
+                console.log('[AI] Generated replacement for legacy re-queue:', aiQ.id);
+                setAiReplacements(prevR => ({ ...prevR, [queueIdx]: aiQ }));
+              }
+            }).catch(() => {});
+          }
+
+          return newQueue;
+        });
       }
       // Note: Easy/Medium failures in cascade don't inject more questions,
       // user just continues to the next question in the cascade
@@ -555,7 +583,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
     }).catch(() => {});
     
   }, [currentQuestion, currentQueueItem, module, gainXP, loseHeart, xpScale, lessonId, 
-      registerWrongAnswer, markRemediated, hearts, conceptsInCascade, lessonDomain]);
+      registerWrongAnswer, markRemediated, hearts, conceptsInCascade, lessonDomain, financial]);
 
   // ==========================================================================
   // HANDLE CONTINUE - Move to next question or complete quiz
