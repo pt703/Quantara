@@ -1,30 +1,10 @@
-// =============================================================================
-// USER DATA CONTEXT
-// =============================================================================
-// 
-// This context provides shared user data (profile and financial) across all
-// screens. When data is updated in one screen, all other screens see the
-// change immediately because they share the same context state.
-//
-// This solves the issue where editing finances in one screen wouldn't update
-// other screens - now all screens use the same shared state.
-//
-// =============================================================================
-
-import React, { createContext, useContext, useCallback, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useState, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserProfile, FinancialSnapshot } from '../types';
-
-// =============================================================================
-// STORAGE KEYS
-// =============================================================================
+import { syncProfile, syncFinancialSnapshot, fetchProfile, fetchFinancialSnapshot } from '@/services/supabaseDataService';
 
 const PROFILE_KEY = 'user_profile';
 const FINANCIAL_KEY = 'user_financial';
-
-// =============================================================================
-// DEFAULT VALUES
-// =============================================================================
 
 const DEFAULT_PROFILE: UserProfile = {
   name: 'Nemo',
@@ -42,10 +22,6 @@ const DEFAULT_FINANCIAL: FinancialSnapshot = {
   portfolioAssets: [],
 };
 
-// =============================================================================
-// CONTEXT TYPE
-// =============================================================================
-
 interface UserDataContextType {
   profile: UserProfile;
   setProfile: (value: UserProfile | ((prev: UserProfile) => UserProfile)) => void;
@@ -55,15 +31,7 @@ interface UserDataContextType {
   refreshData: () => Promise<void>;
 }
 
-// =============================================================================
-// CONTEXT
-// =============================================================================
-
 const UserDataContext = createContext<UserDataContextType | undefined>(undefined);
-
-// =============================================================================
-// PROVIDER
-// =============================================================================
 
 interface UserDataProviderProps {
   children: ReactNode;
@@ -73,13 +41,12 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
   const [profile, setProfileState] = useState<UserProfile>(DEFAULT_PROFILE);
   const [financial, setFinancialState] = useState<FinancialSnapshot>(DEFAULT_FINANCIAL);
   const [loading, setLoading] = useState(true);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load data from storage on mount
   useEffect(() => {
     loadData();
   }, []);
 
-  // Load data from AsyncStorage
   const loadData = async () => {
     try {
       setLoading(true);
@@ -88,12 +55,27 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
         AsyncStorage.getItem(FINANCIAL_KEY),
       ]);
 
-      if (profileData) {
-        setProfileState(JSON.parse(profileData));
+      let loadedProfile = profileData ? JSON.parse(profileData) : null;
+      let loadedFinancial = financialData ? JSON.parse(financialData) : null;
+
+      if (!loadedProfile || !loadedFinancial) {
+        const [remoteProfile, remoteFinancial] = await Promise.all([
+          fetchProfile(),
+          fetchFinancialSnapshot(),
+        ]);
+
+        if (remoteProfile && !loadedProfile) {
+          loadedProfile = remoteProfile;
+          AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(remoteProfile));
+        }
+        if (remoteFinancial && !loadedFinancial) {
+          loadedFinancial = remoteFinancial;
+          AsyncStorage.setItem(FINANCIAL_KEY, JSON.stringify(remoteFinancial));
+        }
       }
-      if (financialData) {
-        setFinancialState(JSON.parse(financialData));
-      }
+
+      if (loadedProfile) setProfileState(loadedProfile);
+      if (loadedFinancial) setFinancialState(loadedFinancial);
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
@@ -101,33 +83,39 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     }
   };
 
-  // Set profile with persistence
+  const debouncedSync = useCallback((syncFn: () => Promise<boolean>) => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      syncFn().catch(err => console.log('[Sync] Background sync skipped:', err));
+    }, 1000);
+  }, []);
+
   const setProfile = useCallback(async (value: UserProfile | ((prev: UserProfile) => UserProfile)) => {
     try {
       setProfileState(current => {
         const newValue = value instanceof Function ? value(current) : value;
         AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(newValue));
+        debouncedSync(() => syncProfile(newValue));
         return newValue;
       });
     } catch (error) {
       console.error('Error saving profile:', error);
     }
-  }, []);
+  }, [debouncedSync]);
 
-  // Set financial with persistence
   const setFinancial = useCallback(async (value: FinancialSnapshot | ((prev: FinancialSnapshot) => FinancialSnapshot)) => {
     try {
       setFinancialState(current => {
         const newValue = value instanceof Function ? value(current) : value;
         AsyncStorage.setItem(FINANCIAL_KEY, JSON.stringify(newValue));
+        debouncedSync(() => syncFinancialSnapshot(newValue));
         return newValue;
       });
     } catch (error) {
       console.error('Error saving financial:', error);
     }
-  }, []);
+  }, [debouncedSync]);
 
-  // Refresh data from storage (useful after external changes)
   const refreshData = useCallback(async () => {
     await loadData();
   }, []);
@@ -147,10 +135,6 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     </UserDataContext.Provider>
   );
 }
-
-// =============================================================================
-// HOOK
-// =============================================================================
 
 export function useUserDataContext() {
   const context = useContext(UserDataContext);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SkillDomain } from '../types';
+import { syncSkillAccuracy } from '@/services/supabaseDataService';
 
 const SKILL_ACCURACY_KEY = '@quantara_skill_accuracy';
 
@@ -68,6 +69,8 @@ export function useSkillAccuracy() {
         },
       };
       saveAccuracy(updated);
+      syncSkillAccuracy(domain, updated[domain].correct, updated[domain].total)
+        .catch(err => console.log('[Sync] Skill accuracy sync skipped:', err));
       return updated;
     });
   }, [saveAccuracy]);

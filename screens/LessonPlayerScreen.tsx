@@ -51,6 +51,7 @@ import { LearnStackParamList } from '../navigation/LearnStackNavigator';
 import { Confetti } from '@/components/Confetti';
 import * as Haptics from '@/utils/haptics';
 import { generateSimilarQuestion, canGenerateAIQuestions } from '@/services/aiQuestionService';
+import { recordQuizResult as recordQuizResultToBackend, syncLessonProgress } from '@/services/supabaseDataService';
 
 // =============================================================================
 // TYPES
@@ -285,6 +286,22 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
       }
     }
 
+    // Record quiz result to backend (fire-and-forget)
+    if (lesson && course) {
+      recordQuizResultToBackend({
+        lesson_id: lesson.id,
+        question_id: currentQuestion.id,
+        concept_id: (currentQuestion as any).conceptId || null,
+        domain: lesson.domain || course.domain,
+        difficulty: currentQuestion.difficulty || 'beginner',
+        difficulty_tier: (currentQuestion as any).difficultyTier || null,
+        is_correct: result.isCorrect,
+        response_time_ms: result.responseTimeMs || null,
+        attempt_number: (questionAttemptCounts[currentQuestion.id] || 0) + 1,
+        is_ai_generated: currentQuestion.id.startsWith('ai-'),
+      }).catch(() => {});
+    }
+
     // Show explanation
     setLastAnswerCorrect(result.isCorrect);
     setCurrentExplanation(currentQuestion?.explanation || '');
@@ -293,7 +310,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     setTimeout(() => {
       setShowExplanation(true);
     }, 800);
-  }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale, isRepeatQuestion, attemptedQuestions, questionQueue, questionAttemptCounts]);
+  }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale, isRepeatQuestion, attemptedQuestions, questionQueue, questionAttemptCounts, lesson, course]);
 
   /**
    * Called when all questions are answered and mastered.
@@ -332,6 +349,17 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     incrementQuizCount(isPerfect);
     updateStreak(streak);
     updateTotalXp(totalXP);
+
+    // Sync lesson progress to backend (fire-and-forget)
+    syncLessonProgress({
+      lesson_id: lessonId,
+      course_id: course.id,
+      status: 'completed',
+      score: xpEarned + completionBonus,
+      accuracy,
+      attempts: 1,
+      completed_at: new Date().toISOString(),
+    }).catch(() => {});
 
     // Haptic celebration!
     Haptics.quizComplete();
