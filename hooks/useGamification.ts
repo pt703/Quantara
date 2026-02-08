@@ -257,6 +257,15 @@ export function useGamification() {
 
   // Local state that may differ from stored (e.g., regenerated hearts)
   const [state, setState] = useState<GamificationState>(DEFAULT_GAMIFICATION_STATE);
+  const stateRef = useRef<GamificationState>(DEFAULT_GAMIFICATION_STATE);
+
+  const updateState = useCallback((updater: (prev: GamificationState) => GamificationState) => {
+    setState(prev => {
+      const next = updater(prev);
+      stateRef.current = next;
+      return next;
+    });
+  }, []);
   
   // Track unlocked achievements
   const [unlockedAchievements, setUnlockedAchievements, , reloadAchievements] = useStorage<string[]>(
@@ -321,6 +330,7 @@ export function useGamification() {
       };
 
       setState(updatedState);
+      stateRef.current = updatedState;
       
       // Persist if hearts changed
       if (regeneratedHearts !== storedState.hearts) {
@@ -338,37 +348,41 @@ export function useGamification() {
    * Returns true if the heart was lost, false if already at 0.
    */
   const loseHeart = useCallback((): boolean => {
-    if (state.hearts <= 0) {
-      return false; // Can't lose what you don't have
+    const current = stateRef.current;
+    if (current.hearts <= 0) {
+      return false;
     }
 
-    const newHearts = state.hearts - 1;
     const newState: GamificationState = {
-      ...state,
-      hearts: newHearts,
+      ...current,
+      hearts: current.hearts - 1,
     };
 
     setState(newState);
+    stateRef.current = newState;
     setStoredState(newState);
     debouncedSyncGamification(newState);
     return true;
-  }, [state, setStoredState, debouncedSyncGamification]);
+  }, [setStoredState, debouncedSyncGamification]);
 
   /**
    * Adds hearts (e.g., from watching an ad or buying).
    * Capped at MAX_HEARTS.
    */
   const addHearts = useCallback((amount: number): void => {
-    const newHearts = Math.min(state.hearts + amount, MAX_HEARTS);
+    const current = stateRef.current;
+    const newHearts = Math.min(current.hearts + amount, MAX_HEARTS);
     const newState: GamificationState = {
-      ...state,
+      ...current,
       hearts: newHearts,
       heartsLastRefilled: new Date().toISOString(),
     };
 
     setState(newState);
+    stateRef.current = newState;
     setStoredState(newState);
-  }, [state, setStoredState]);
+    debouncedSyncGamification(newState);
+  }, [setStoredState, debouncedSyncGamification]);
 
   /**
    * Awards a heart for completing a lesson successfully.
@@ -376,34 +390,34 @@ export function useGamification() {
    * Returns true if a heart was awarded (not at max).
    */
   const earnHeart = useCallback((): boolean => {
-    if (state.hearts >= MAX_HEARTS) {
-      return false; // Already at max
+    const current = stateRef.current;
+    if (current.hearts >= MAX_HEARTS) {
+      return false;
     }
 
-    const newHearts = state.hearts + 1;
     const newState: GamificationState = {
-      ...state,
-      hearts: newHearts,
+      ...current,
+      hearts: current.hearts + 1,
     };
 
     setState(newState);
+    stateRef.current = newState;
     setStoredState(newState);
     return true;
-  }, [state, setStoredState]);
+  }, [setStoredState]);
 
-  /**
-   * Refills hearts to max (e.g., from purchasing or daily reset).
-   */
   const refillHearts = useCallback((): void => {
+    const current = stateRef.current;
     const newState: GamificationState = {
-      ...state,
+      ...current,
       hearts: MAX_HEARTS,
       heartsLastRefilled: new Date().toISOString(),
     };
 
     setState(newState);
+    stateRef.current = newState;
     setStoredState(newState);
-  }, [state, setStoredState]);
+  }, [setStoredState]);
 
   // ==========================================================================
   // XP MANAGEMENT
@@ -415,20 +429,19 @@ export function useGamification() {
    * Returns the actual XP gained (after bonus).
    */
   const gainXP = useCallback((baseXP: number): number => {
-    // Apply streak bonus multiplier
-    const multiplier = getStreakMultiplier(state.streak);
+    const current = stateRef.current;
+    const multiplier = getStreakMultiplier(current.streak);
     const actualXP = Math.round(baseXP * multiplier);
 
-    const newTotalXP = state.xp + actualXP;
+    const newTotalXP = current.xp + actualXP;
     const newLevel = calculateLevel(newTotalXP);
 
-    // Track today's XP - reset if it's a new day
     const todayStr = new Date().toISOString().split('T')[0];
-    const isNewDay = state.todayXPDate !== todayStr;
-    const newTodayXP = isNewDay ? actualXP : (state.todayXP || 0) + actualXP;
+    const isNewDay = current.todayXPDate !== todayStr;
+    const newTodayXP = isNewDay ? actualXP : (current.todayXP || 0) + actualXP;
 
     const newState: GamificationState = {
-      ...state,
+      ...current,
       xp: newTotalXP,
       level: newLevel,
       todayXP: newTodayXP,
@@ -436,11 +449,12 @@ export function useGamification() {
     };
 
     setState(newState);
+    stateRef.current = newState;
     setStoredState(newState);
     debouncedSyncGamification(newState);
 
     return actualXP;
-  }, [state, setStoredState, debouncedSyncGamification]);
+  }, [setStoredState, debouncedSyncGamification]);
 
   // ==========================================================================
   // STREAK MANAGEMENT
@@ -458,41 +472,36 @@ export function useGamification() {
    * Streak requires completing at least one lesson every 24 hours to maintain.
    */
   const updateStreak = useCallback((): void => {
+    const current = stateRef.current;
     const now = new Date();
     const nowTimestamp = now.toISOString();
-    const todayStr = nowTimestamp.split('T')[0]; // YYYY-MM-DD for activeDays
+    const todayStr = nowTimestamp.split('T')[0];
 
     let newStreak: number;
-    const lastTimestamp = state.lastActivityTimestamp || state.lastActiveDate;
+    const lastTimestamp = current.lastActivityTimestamp || current.lastActiveDate;
 
     if (!lastTimestamp) {
-      // First ever lesson - streak starts at 1
       newStreak = 1;
     } else {
-      // Check if within 24 hours of last activity
       const lastActive = new Date(lastTimestamp);
       const hoursSinceLastActivity = (now.getTime() - lastActive.getTime()) / (1000 * 60 * 60);
       
       if (hoursSinceLastActivity <= 24) {
-        // Within 24 hours - increment streak
-        newStreak = state.streak + 1;
+        newStreak = current.streak + 1;
       } else {
-        // More than 24 hours - streak resets to 1 (since they're completing a lesson now)
         newStreak = 1;
       }
     }
 
-    // Update longest streak if current streak is higher
-    const newLongestStreak = Math.max(state.longestStreak || 0, newStreak);
+    const newLongestStreak = Math.max(current.longestStreak || 0, newStreak);
 
-    // Add today to active days (keep last 90 days for weekly chart)
-    const existingActiveDays = state.activeDays || [];
+    const existingActiveDays = current.activeDays || [];
     const newActiveDays = existingActiveDays.includes(todayStr)
       ? existingActiveDays
       : [...existingActiveDays, todayStr].slice(-90);
 
     const newState: GamificationState = {
-      ...state,
+      ...current,
       streak: newStreak,
       longestStreak: newLongestStreak,
       lastActiveDate: todayStr,
@@ -501,9 +510,10 @@ export function useGamification() {
     };
 
     setState(newState);
+    stateRef.current = newState;
     setStoredState(newState);
     debouncedSyncGamification(newState);
-  }, [state, setStoredState, debouncedSyncGamification]);
+  }, [setStoredState, debouncedSyncGamification]);
 
   /**
    * Checks if the streak has expired (more than 24 hours without a lesson).
