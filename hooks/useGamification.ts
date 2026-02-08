@@ -464,12 +464,13 @@ export function useGamification() {
    * Updates the streak based on lesson completion.
    * Call this when user completes a lesson/quiz.
    * 
-   * STREAK MECHANICS (24-hour based):
+   * STREAK MECHANICS (calendar-day based):
    * - First ever lesson: streak starts at 1
-   * - If completed within 24 hours of last activity: increment streak by 1
-   * - If more than 24 hours since last activity: streak resets to 1
+   * - Same day as last activity: streak stays the same (no double-counting)
+   * - Next calendar day after last activity: streak increments by 1
+   * - More than 1 day gap: streak resets to 1
    * 
-   * Streak requires completing at least one lesson every 24 hours to maintain.
+   * Streak increments at most once per calendar day.
    */
   const updateStreak = useCallback((): void => {
     const current = stateRef.current;
@@ -478,15 +479,18 @@ export function useGamification() {
     const todayStr = nowTimestamp.split('T')[0];
 
     let newStreak: number;
-    const lastTimestamp = current.lastActivityTimestamp || current.lastActiveDate;
+    const lastDateStr = current.lastActiveDate;
 
-    if (!lastTimestamp) {
+    if (!lastDateStr) {
       newStreak = 1;
+    } else if (lastDateStr === todayStr) {
+      newStreak = current.streak;
     } else {
-      const lastActive = new Date(lastTimestamp);
-      const hoursSinceLastActivity = (now.getTime() - lastActive.getTime()) / (1000 * 60 * 60);
+      const lastActive = new Date(lastDateStr + 'T00:00:00');
+      const today = new Date(todayStr + 'T00:00:00');
+      const daysDiff = Math.round((today.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24));
       
-      if (hoursSinceLastActivity <= 24) {
+      if (daysDiff === 1) {
         newStreak = current.streak + 1;
       } else {
         newStreak = 1;
@@ -516,20 +520,25 @@ export function useGamification() {
   }, [setStoredState, debouncedSyncGamification]);
 
   /**
-   * Checks if the streak has expired (more than 24 hours without a lesson).
+   * Checks if the streak has expired (missed a calendar day).
    * Returns true if streak should be considered broken.
    * Used for display purposes to show the user their streak status.
    */
   const isStreakExpired = useCallback((): boolean => {
     if (state.streak === 0) {
-      return false; // No streak to expire
-    }
-    const lastTimestamp = state.lastActivityTimestamp || state.lastActiveDate;
-    if (!lastTimestamp) {
       return false;
     }
-    return !isWithin24Hours(lastTimestamp);
-  }, [state.lastActivityTimestamp, state.lastActiveDate, state.streak]);
+    const lastDateStr = state.lastActiveDate;
+    if (!lastDateStr) {
+      return false;
+    }
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (lastDateStr === todayStr) return false;
+    const lastActive = new Date(lastDateStr + 'T00:00:00');
+    const today = new Date(todayStr + 'T00:00:00');
+    const daysDiff = Math.round((today.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24));
+    return daysDiff > 1;
+  }, [state.lastActiveDate, state.streak]);
   
   /**
    * Gets the current streak, accounting for expiry.

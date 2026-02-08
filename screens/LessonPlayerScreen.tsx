@@ -92,7 +92,8 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
   const { incrementLessonCount, incrementQuizCount, updateStreak, updateTotalXp } = useBadges();
   
   // Adaptive learning hook
-  const { recordLessonAttempt } = useAdaptiveLearning(streak);
+  const { recordLessonAttempt, isLessonCompleted } = useAdaptiveLearning(streak);
+  const isAlreadyCompleted = isLessonCompleted(lessonId);
 
   // ==========================================================================
   // STATE
@@ -232,10 +233,12 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
       Haptics.correctAnswer();
       
       // Add XP with animation (reduced XP for repeated questions)
-      // Repeat questions award 50% XP as per Duolingo-style design
-      const xpAmount = isRepeatQuestion ? Math.round(result.xpEarned * 0.5) : result.xpEarned;
-      setXpEarned(prev => prev + xpAmount);
-      Haptics.xpEarned();
+      // No XP on review (already completed lesson)
+      if (!isAlreadyCompleted) {
+        const xpAmount = isRepeatQuestion ? Math.round(result.xpEarned * 0.5) : result.xpEarned;
+        setXpEarned(prev => prev + xpAmount);
+        Haptics.xpEarned();
+      }
       xpScale.value = withSequence(
         withTiming(1.3, { duration: 150 }),
         withSpring(1)
@@ -247,10 +250,12 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
         [currentQuestion.id]: (prev[currentQuestion.id] || 0) + 1,
       }));
     } else {
-      // Lose a heart on wrong answer
+      // Lose a heart on wrong answer (only on first completion, not reviews)
       Haptics.wrongAnswer();
-      loseHeart();
-      setHeartsLost(prev => prev + 1);
+      if (!isAlreadyCompleted) {
+        loseHeart();
+        setHeartsLost(prev => prev + 1);
+      }
       
       // Track attempt count for this question (for AI difficulty adjustment)
       const attemptCount = (questionAttemptCounts[currentQuestion.id] || 0) + 1;
@@ -310,7 +315,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     setTimeout(() => {
       setShowExplanation(true);
     }, 800);
-  }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale, isRepeatQuestion, attemptedQuestions, questionQueue, questionAttemptCounts, lesson, course]);
+  }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale, isRepeatQuestion, attemptedQuestions, questionQueue, questionAttemptCounts, lesson, course, isAlreadyCompleted]);
 
   /**
    * Called when all questions are answered and mastered.
@@ -324,38 +329,36 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     // Perfect score = mastered all questions on first try (no repeats needed)
     const isPerfect = questionQueue.length === originalQuestionCount;
 
-    // Award completion XP
-    const completionBonus = Math.round(lesson.xpReward * 0.5);
-    const totalXP = gainXP(xpEarned + completionBonus);
-    
-    // Award heart for completing the lesson
-    // Users EARN hearts by finishing lessons, not by default
-    earnHeart();
+    // Only award rewards if this is the FIRST completion (not a review)
+    if (!isAlreadyCompleted) {
+      const completionBonus = Math.round(lesson.xpReward * 0.5);
+      const totalXP = gainXP(xpEarned + completionBonus);
+      
+      earnHeart();
 
-    // Record for adaptive learning
+      recordLessonComplete(isPerfect);
+      
+      incrementLessonCount();
+      incrementQuizCount(isPerfect);
+      updateStreak(streak);
+      updateTotalXp(totalXP);
+    }
+
+    // Record for adaptive learning (always, even on review)
     recordLessonAttempt(
       lessonId,
       accuracy,
       timeSpent,
-      true,  // completed
-      true   // was recommended (we can enhance this later)
+      true,
+      true
     );
-
-    // Record for achievements
-    recordLessonComplete(isPerfect);
-    
-    // Trigger badge checks
-    incrementLessonCount();
-    incrementQuizCount(isPerfect);
-    updateStreak(streak);
-    updateTotalXp(totalXP);
 
     // Sync lesson progress to backend (fire-and-forget)
     syncLessonProgress({
       lesson_id: lessonId,
       course_id: course.id,
       status: 'completed',
-      score: xpEarned + completionBonus,
+      score: isAlreadyCompleted ? 0 : xpEarned + Math.round(lesson.xpReward * 0.5),
       accuracy,
       attempts: 1,
       completed_at: new Date().toISOString(),
@@ -366,7 +369,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
 
     // Show completion modal
     setShowCompletion(true);
-  }, [lesson, course, startTime, originalQuestionCount, questionQueue.length, xpEarned, gainXP, earnHeart, recordLessonAttempt, recordLessonComplete, lessonId, accuracy, incrementLessonCount, incrementQuizCount, updateStreak, updateTotalXp, streak]);
+  }, [lesson, course, startTime, originalQuestionCount, questionQueue.length, xpEarned, gainXP, earnHeart, recordLessonAttempt, recordLessonComplete, lessonId, accuracy, incrementLessonCount, incrementQuizCount, updateStreak, updateTotalXp, streak, isAlreadyCompleted]);
 
   /**
    * Called when user closes explanation and moves to next question.
@@ -514,17 +517,26 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
         </View>
       </View>
 
-      {/* XP display */}
-      <Animated.View style={[styles.xpContainer, xpAnimatedStyle]}>
-        <ThemedText style={[styles.xpText, { color: theme.primary }]}>
-          +{xpEarned} XP
-        </ThemedText>
-        {streakMultiplier > 1 && (
-          <ThemedText style={[styles.streakBonus, { color: theme.textSecondary }]}>
-            ({Math.round((streakMultiplier - 1) * 100)}% streak bonus)
+      {/* Review mode notice or XP display */}
+      {isAlreadyCompleted ? (
+        <View style={[styles.reviewBanner, { backgroundColor: theme.primary + '15' }]}>
+          <Feather name="refresh-cw" size={14} color={theme.primary} />
+          <ThemedText style={[styles.reviewBannerText, { color: theme.primary }]}>
+            Review Mode - No rewards
           </ThemedText>
-        )}
-      </Animated.View>
+        </View>
+      ) : (
+        <Animated.View style={[styles.xpContainer, xpAnimatedStyle]}>
+          <ThemedText style={[styles.xpText, { color: theme.primary }]}>
+            +{xpEarned} XP
+          </ThemedText>
+          {streakMultiplier > 1 && (
+            <ThemedText style={[styles.streakBonus, { color: theme.textSecondary }]}>
+              ({Math.round((streakMultiplier - 1) * 100)}% streak bonus)
+            </ThemedText>
+          )}
+        </Animated.View>
+      )}
 
       <Spacer height={Spacing.lg} />
 
@@ -652,7 +664,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
             <Spacer height={Spacing.lg} />
 
             <ThemedText style={styles.completionTitle}>
-              Lesson Complete!
+              {isAlreadyCompleted ? 'Review Complete!' : 'Lesson Complete!'}
             </ThemedText>
 
             <Spacer height={Spacing.sm} />
@@ -660,6 +672,18 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
             <ThemedText style={[styles.completionSubtitle, { color: theme.textSecondary }]}>
               {lesson.title}
             </ThemedText>
+
+            {isAlreadyCompleted ? (
+              <>
+                <Spacer height={Spacing.md} />
+                <View style={[styles.reviewNotice, { backgroundColor: theme.primary + '15' }]}>
+                  <Feather name="info" size={16} color={theme.primary} />
+                  <ThemedText style={[styles.reviewNoticeText, { color: theme.primary }]}>
+                    This is a review. No hearts or XP awarded for repeated lessons.
+                  </ThemedText>
+                </View>
+              </>
+            ) : null}
 
             <Spacer height={Spacing.xl} />
 
@@ -676,33 +700,37 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
                 </ThemedText>
               </View>
 
-              {/* XP Earned */}
-              <View style={styles.statItem}>
-                <Feather name="zap" size={24} color="#EAB308" />
-                <ThemedText style={styles.statValue}>
-                  +{xpEarned + Math.round(lesson.xpReward * 0.5)}
-                </ThemedText>
-                <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
-                  XP Earned
-                </ThemedText>
-              </View>
+              {!isAlreadyCompleted ? (
+                <>
+                  {/* XP Earned */}
+                  <View style={styles.statItem}>
+                    <Feather name="zap" size={24} color="#EAB308" />
+                    <ThemedText style={styles.statValue}>
+                      +{xpEarned + Math.round(lesson.xpReward * 0.5)}
+                    </ThemedText>
+                    <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
+                      XP Earned
+                    </ThemedText>
+                  </View>
 
-              {/* Hearts Lost */}
-              <View style={styles.statItem}>
-                <Feather name="heart" size={24} color="#EF4444" />
-                <ThemedText style={styles.statValue}>
-                  -{heartsLost}
-                </ThemedText>
-                <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
-                  Hearts Lost
-                </ThemedText>
-              </View>
+                  {/* Hearts Lost */}
+                  <View style={styles.statItem}>
+                    <Feather name="heart" size={24} color="#EF4444" />
+                    <ThemedText style={styles.statValue}>
+                      -{heartsLost}
+                    </ThemedText>
+                    <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
+                      Hearts Lost
+                    </ThemedText>
+                  </View>
+                </>
+              ) : null}
             </View>
 
             <Spacer height={Spacing.xl} />
 
             {/* Perfect score message - achieved if no questions needed repeating */}
-            {questionQueue.length === originalQuestionCount && heartsLost === 0 && (
+            {questionQueue.length === originalQuestionCount && heartsLost === 0 && !isAlreadyCompleted ? (
               <>
                 <View style={[styles.perfectBadge, { backgroundColor: '#22C55E20' }]}>
                   <Feather name="star" size={20} color="#22C55E" />
@@ -712,7 +740,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
                 </View>
                 <Spacer height={Spacing.lg} />
               </>
-            )}
+            ) : null}
 
             {/* Done button */}
             <Pressable
@@ -916,5 +944,32 @@ const styles = StyleSheet.create({
   doneButtonText: {
     ...Typography.headline,
     color: '#FFFFFF',
+  },
+  reviewNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  reviewNoticeText: {
+    ...Typography.footnote,
+    fontWeight: '500',
+    flex: 1,
+  },
+  reviewBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    marginHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.xs,
+  },
+  reviewBannerText: {
+    ...Typography.caption,
+    fontWeight: '600',
   },
 });

@@ -98,6 +98,9 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   
   const { recordQuizAttempt, getModuleProgress } = useModuleProgress();
   const { hearts, loseHeart, gainXP, addHearts, streak, recordLessonComplete } = useGamification();
+  
+  const existingProgress = getModuleProgress(moduleId);
+  const isAlreadyCompleted = existingProgress?.status === 'completed' && existingProgress?.masteryAchieved;
   const { registerWrongAnswer, markRemediated } = useWrongAnswerRegistry();
   const { recordQuizResult } = useSkillAccuracy();
   const { recordLessonAttempt } = useAdaptiveLearning(streak);
@@ -342,12 +345,15 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       setTotalCorrect(prev => prev + 1);
       
       // Award XP - reduced for penalty questions to incentivize first-try success
-      const xpAmount = currentQueueItem.isPenalty 
-        ? Math.round(result.xpEarned * 0.5)  // 50% XP for penalty questions
-        : result.xpEarned;                    // Full XP for initial hard test
-      setXpEarned(prev => prev + xpAmount);
-      gainXP(xpAmount);
-      Haptics.xpEarned();
+      // No XP on review (already completed)
+      if (!isAlreadyCompleted) {
+        const xpAmount = currentQueueItem.isPenalty 
+          ? Math.round(result.xpEarned * 0.5)  // 50% XP for penalty questions
+          : result.xpEarned;                    // Full XP for initial hard test
+        setXpEarned(prev => prev + xpAmount);
+        gainXP(xpAmount);
+        Haptics.xpEarned();
+      }
       
       // Animate XP gain
       xpScale.value = withSequence(
@@ -385,8 +391,10 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       // WRONG ANSWER
       // =================================================================
       Haptics.wrongAnswer();
-      loseHeart();
-      setHeartsLost(prev => prev + 1);
+      if (!isAlreadyCompleted) {
+        loseHeart();
+        setHeartsLost(prev => prev + 1);
+      }
       
       // Check if this is an initial HARD test failure (triggers penalty cascade)
       if (currentQueueItem.isInitialHardTest && conceptId && module?.conceptVariants) {
@@ -615,22 +623,27 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       // Mark lesson as complete in adaptive learning system for course progress
       recordLessonAttempt(lessonId, accuracy, totalAttempts * 30, true, false);
       
-      // Award +5 hearts for completing the quiz
-      addHearts(5);
-      setHeartsEarned(5);
+      // Only award rewards if this is the FIRST completion (not a review)
+      if (!isAlreadyCompleted) {
+        addHearts(5);
+        setHeartsEarned(5);
+        
+        const isPerfect = score === 100;
+        recordLessonComplete(isPerfect);
+      } else {
+        setHeartsEarned(0);
+      }
       
       // Record skill accuracy for the lesson domain
       if (lessonDomain) {
         recordQuizResult(lessonDomain, totalCorrect, totalAttempts);
       }
       
-      // Update streak - lesson/quiz completed!
-      const isPerfect = score === 100;
-      recordLessonComplete(isPerfect);
-      
       // Haptic celebration!
       Haptics.quizComplete();
-      Haptics.heartsEarned();
+      if (!isAlreadyCompleted) {
+        Haptics.heartsEarned();
+      }
       
       // Log final results for research
       console.log('[ADAPTIVE QUIZ COMPLETE]', {
@@ -638,7 +651,8 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         totalQuestions: totalAttempts,
         accuracy: score,
         conceptResults: Array.from(conceptResults.entries()),
-        heartsEarned: 5,
+        heartsEarned: isAlreadyCompleted ? 0 : 5,
+        isReview: isAlreadyCompleted,
       });
 
       // Sync lesson progress to Supabase backend
@@ -663,21 +677,25 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       // Mark lesson as complete even if not all mastered
       recordLessonAttempt(lessonId, accuracy, totalAttempts * 30, true, false);
       
-      // Still award hearts for completing
-      addHearts(5);
-      setHeartsEarned(5);
+      // Only award rewards if this is the FIRST completion (not a review)
+      if (!isAlreadyCompleted) {
+        addHearts(5);
+        setHeartsEarned(5);
+        recordLessonComplete(score === 100);
+      } else {
+        setHeartsEarned(0);
+      }
       
       // Record skill accuracy
       if (lessonDomain) {
         recordQuizResult(lessonDomain, totalCorrect, totalAttempts);
       }
       
-      // Update streak - lesson/quiz completed!
-      recordLessonComplete(score === 100);
-      
       // Haptic celebration!
       Haptics.quizComplete();
-      Haptics.heartsEarned();
+      if (!isAlreadyCompleted) {
+        Haptics.heartsEarned();
+      }
 
       // Sync lesson progress to Supabase backend
       syncLessonProgress({
@@ -696,7 +714,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       setCurrentIndex(prev => prev + 1);
     }
   }, [currentIndex, questionQueue, module, masteredConcepts, totalCorrect, totalAttempts, 
-      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult, recordLessonComplete, xpEarned]);
+      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult, recordLessonComplete, xpEarned, isAlreadyCompleted]);
 
   // Handle completion dismiss
   const handleCompletionClose = useCallback(() => {
@@ -742,12 +760,21 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         </View>
       </View>
 
-      {/* XP display */}
-      <Animated.View style={[styles.xpContainer, xpAnimatedStyle]}>
-        <ThemedText style={[styles.xpText, { color: theme.primary }]}>
-          +{xpEarned} XP
-        </ThemedText>
-      </Animated.View>
+      {/* Review mode notice or XP display */}
+      {isAlreadyCompleted ? (
+        <View style={[styles.reviewBanner, { backgroundColor: theme.primary + '15' }]}>
+          <Feather name="refresh-cw" size={14} color={theme.primary} />
+          <ThemedText style={[styles.reviewBannerText, { color: theme.primary }]}>
+            Review Mode - No rewards
+          </ThemedText>
+        </View>
+      ) : (
+        <Animated.View style={[styles.xpContainer, xpAnimatedStyle]}>
+          <ThemedText style={[styles.xpText, { color: theme.primary }]}>
+            +{xpEarned} XP
+          </ThemedText>
+        </Animated.View>
+      )}
 
       <Spacer height={Spacing.lg} />
 
@@ -918,7 +945,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
             <Spacer height={Spacing.lg} />
 
             <ThemedText style={styles.completionTitle}>
-              Quiz Complete!
+              {isAlreadyCompleted ? 'Review Complete!' : 'Quiz Complete!'}
             </ThemedText>
 
             <Spacer height={Spacing.sm} />
@@ -926,6 +953,18 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
             <ThemedText style={[styles.completionSubtitle, { color: theme.textSecondary }]}>
               {module.title}
             </ThemedText>
+
+            {isAlreadyCompleted ? (
+              <>
+                <Spacer height={Spacing.md} />
+                <View style={[styles.reviewNotice, { backgroundColor: theme.primary + '15' }]}>
+                  <Feather name="info" size={16} color={theme.primary} />
+                  <ThemedText style={[styles.reviewNoticeText, { color: theme.primary }]}>
+                    This is a review. No hearts or XP awarded for repeated quizzes.
+                  </ThemedText>
+                </View>
+              </>
+            ) : null}
 
             <Spacer height={Spacing.xl} />
 
@@ -942,33 +981,37 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
                 </ThemedText>
               </View>
 
-              {/* XP Earned */}
-              <View style={styles.statItem}>
-                <Feather name="zap" size={24} color="#EAB308" />
-                <ThemedText style={styles.statValue}>
-                  +{xpEarned}
-                </ThemedText>
-                <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
-                  XP Earned
-                </ThemedText>
-              </View>
+              {!isAlreadyCompleted ? (
+                <>
+                  {/* XP Earned */}
+                  <View style={styles.statItem}>
+                    <Feather name="zap" size={24} color="#EAB308" />
+                    <ThemedText style={styles.statValue}>
+                      +{xpEarned}
+                    </ThemedText>
+                    <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
+                      XP Earned
+                    </ThemedText>
+                  </View>
 
-              {/* Hearts Earned */}
-              <View style={styles.statItem}>
-                <Feather name="heart" size={24} color="#EF4444" />
-                <ThemedText style={styles.statValue}>
-                  +{heartsEarned}
-                </ThemedText>
-                <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
-                  Hearts
-                </ThemedText>
-              </View>
+                  {/* Hearts Earned */}
+                  <View style={styles.statItem}>
+                    <Feather name="heart" size={24} color="#EF4444" />
+                    <ThemedText style={styles.statValue}>
+                      +{heartsEarned}
+                    </ThemedText>
+                    <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
+                      Hearts
+                    </ThemedText>
+                  </View>
+                </>
+              ) : null}
             </View>
 
             <Spacer height={Spacing.xl} />
 
             {/* Perfect score message */}
-            {totalCorrect === totalAttempts && (
+            {totalCorrect === totalAttempts && !isAlreadyCompleted ? (
               <>
                 <View style={[styles.perfectBadge, { backgroundColor: '#22C55E20' }]}>
                   <Feather name="star" size={20} color="#22C55E" />
@@ -978,7 +1021,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
                 </View>
                 <Spacer height={Spacing.lg} />
               </>
-            )}
+            ) : null}
 
             {/* Continue button */}
             <Pressable
@@ -1187,6 +1230,33 @@ const styles = StyleSheet.create({
   completeButtonText: {
     ...Typography.headline,
     color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  reviewNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  reviewNoticeText: {
+    ...Typography.footnote,
+    fontWeight: '500',
+    flex: 1,
+  },
+  reviewBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    marginHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.xs,
+  },
+  reviewBannerText: {
+    ...Typography.caption,
     fontWeight: '600',
   },
 });
