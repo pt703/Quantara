@@ -64,6 +64,7 @@ import { getConceptForQuestion, getVariantQuestions } from '../mock/conceptTags'
 import { getQuestionById, getLessonById } from '../mock/courses';
 import { Confetti } from '@/components/Confetti';
 import * as Haptics from '@/utils/haptics';
+import { recordQuizResult as recordQuizResultToBackend, syncLessonProgress } from '@/services/supabaseDataService';
 
 // =============================================================================
 // TYPES
@@ -471,9 +472,23 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       responseTimeMs,
       heartsRemaining: result.isCorrect ? hearts : hearts - 1,
     });
+
+    // Record quiz result to Supabase backend (fire-and-forget)
+    recordQuizResultToBackend({
+      lesson_id: lessonId,
+      question_id: currentQuestion.id,
+      concept_id: conceptId || null,
+      domain: lessonDomain || 'budgeting',
+      difficulty: currentQueueItem.difficultyTier === 1 ? 'beginner' : currentQueueItem.difficultyTier === 2 ? 'intermediate' : 'advanced',
+      difficulty_tier: currentQueueItem.difficultyTier,
+      is_correct: result.isCorrect,
+      response_time_ms: responseTimeMs,
+      attempt_number: currentQueueItem.isPenalty ? (currentQueueItem.penaltyPosition || 0) + 1 : 1,
+      is_ai_generated: false,
+    }).catch(() => {});
     
   }, [currentQuestion, currentQueueItem, module, gainXP, loseHeart, xpScale, lessonId, 
-      registerWrongAnswer, markRemediated, hearts, conceptsInCascade]);
+      registerWrongAnswer, markRemediated, hearts, conceptsInCascade, lessonDomain]);
 
   // ==========================================================================
   // HANDLE CONTINUE - Move to next question or complete quiz
@@ -530,6 +545,17 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         conceptResults: Array.from(conceptResults.entries()),
         heartsEarned: 5,
       });
+
+      // Sync lesson progress to Supabase backend
+      syncLessonProgress({
+        lesson_id: lessonId,
+        course_id: lessonId.split('-').slice(0, 2).join('-'),
+        status: 'completed',
+        score: xpEarned,
+        accuracy,
+        attempts: totalAttempts,
+        completed_at: new Date().toISOString(),
+      }).catch(() => {});
       
       setShowCompletion(true);
     } else if (atEndOfQueue && !allConceptsMastered) {
@@ -557,6 +583,17 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       // Haptic celebration!
       Haptics.quizComplete();
       Haptics.heartsEarned();
+
+      // Sync lesson progress to Supabase backend
+      syncLessonProgress({
+        lesson_id: lessonId,
+        course_id: lessonId.split('-').slice(0, 2).join('-'),
+        status: 'completed',
+        score: xpEarned,
+        accuracy,
+        attempts: totalAttempts,
+        completed_at: new Date().toISOString(),
+      }).catch(() => {});
       
       setShowCompletion(true);
     } else {
@@ -564,7 +601,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       setCurrentIndex(prev => prev + 1);
     }
   }, [currentIndex, questionQueue, module, masteredConcepts, totalCorrect, totalAttempts, 
-      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult, recordLessonComplete]);
+      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult, recordLessonComplete, xpEarned]);
 
   // Handle completion dismiss
   const handleCompletionClose = useCallback(() => {
