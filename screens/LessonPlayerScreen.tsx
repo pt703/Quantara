@@ -542,6 +542,16 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
           {isRepeatQuestion ? ' (Review)' : ''}
         </ThemedText>
 
+        {/* AI-generated question indicator */}
+        {currentQuestion && currentQuestion.id.startsWith('ai-') && (
+          <View style={styles.aiBadgeContainer}>
+            <View style={styles.aiBadge}>
+              <Feather name="cpu" size={12} color="#FFFFFF" />
+              <ThemedText style={styles.aiBadgeText}>AI Generated</ThemedText>
+            </View>
+          </View>
+        )}
+
         <Spacer height={Spacing.lg} />
 
         {/* Question component */}
@@ -776,6 +786,25 @@ const styles = StyleSheet.create({
   questionCounter: {
     ...Typography.subhead,
     textAlign: 'center',
+  },
+  aiBadgeContainer: {
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+  },
+  aiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    gap: 4,
+  },
+  aiBadgeText: {
+    ...Typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 11,
   },
   noHeartsContainer: {
     flex: 1,
