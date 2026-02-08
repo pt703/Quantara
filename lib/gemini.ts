@@ -4,6 +4,10 @@ import Constants from 'expo-constants';
 const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey || 
   process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
 
+const MODEL_NAME = 'gemini-2.0-flash';
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 2000;
+
 let genAI: GoogleGenerativeAI | null = null;
 let model: GenerativeModel | null = null;
 
@@ -24,7 +28,7 @@ export function getGeminiClient(): GoogleGenerativeAI | null {
   return genAI;
 }
 
-export function getGeminiModel(modelName: string = 'gemini-1.5-flash'): GenerativeModel | null {
+export function getGeminiModel(modelName: string = MODEL_NAME): GenerativeModel | null {
   const client = getGeminiClient();
   if (!client) return null;
 
@@ -35,20 +39,37 @@ export function getGeminiModel(modelName: string = 'gemini-1.5-flash'): Generati
   return model;
 }
 
-export async function generateContent(prompt: string): Promise<string | null> {
-  try {
-    const geminiModel = getGeminiModel();
-    if (!geminiModel) {
-      return null;
-    }
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-    const result = await geminiModel.generateContent(prompt);
-    const response = result.response;
-    return response.text();
-  } catch (error) {
-    console.error('Error generating content with Gemini:', error);
+export async function generateContent(prompt: string): Promise<string | null> {
+  const geminiModel = getGeminiModel();
+  if (!geminiModel) {
     return null;
   }
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const result = await geminiModel.generateContent(prompt);
+      const response = result.response;
+      return response.text();
+    } catch (error: any) {
+      const status = error?.status;
+      
+      if (status === 429 && attempt < MAX_RETRIES) {
+        const retryDelay = RETRY_DELAY_MS * Math.pow(2, attempt);
+        console.log(`[Gemini] Rate limited, retrying in ${retryDelay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        await sleep(retryDelay);
+        continue;
+      }
+      
+      console.error(`[Gemini] Error generating content (attempt ${attempt + 1}):`, error?.message || error);
+      return null;
+    }
+  }
+
+  return null;
 }
 
 export async function generateJSON<T>(prompt: string): Promise<T | null> {
@@ -61,7 +82,7 @@ export async function generateJSON<T>(prompt: string): Promise<T | null> {
     
     return JSON.parse(jsonString.trim()) as T;
   } catch (error) {
-    console.error('Error parsing Gemini JSON response:', error);
+    console.error('[Gemini] Error parsing JSON response:', error);
     return null;
   }
 }
