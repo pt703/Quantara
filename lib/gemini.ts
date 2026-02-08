@@ -6,13 +6,20 @@ const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey ||
 
 const MODEL_NAME = 'gemini-2.0-flash';
 const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 2000;
+const BASE_RETRY_DELAY_MS = 5000;
 
 let genAI: GoogleGenerativeAI | null = null;
 let model: GenerativeModel | null = null;
 
+let lastRateLimitTime = 0;
+const RATE_LIMIT_COOLDOWN_MS = 60000;
+
 export function isGeminiConfigured(): boolean {
   return Boolean(GEMINI_API_KEY);
+}
+
+export function isRateLimited(): boolean {
+  return Date.now() - lastRateLimitTime < RATE_LIMIT_COOLDOWN_MS;
 }
 
 export function getGeminiClient(): GoogleGenerativeAI | null {
@@ -44,6 +51,11 @@ async function sleep(ms: number): Promise<void> {
 }
 
 export async function generateContent(prompt: string): Promise<string | null> {
+  if (isRateLimited()) {
+    console.log('[Gemini] Skipping request - in cooldown period after rate limit');
+    return null;
+  }
+
   const geminiModel = getGeminiModel();
   if (!geminiModel) {
     return null;
@@ -53,18 +65,24 @@ export async function generateContent(prompt: string): Promise<string | null> {
     try {
       const result = await geminiModel.generateContent(prompt);
       const response = result.response;
+      console.log('[Gemini] Request successful');
       return response.text();
     } catch (error: any) {
       const status = error?.status;
       
-      if (status === 429 && attempt < MAX_RETRIES) {
-        const retryDelay = RETRY_DELAY_MS * Math.pow(2, attempt);
-        console.log(`[Gemini] Rate limited, retrying in ${retryDelay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-        await sleep(retryDelay);
-        continue;
+      if (status === 429) {
+        lastRateLimitTime = Date.now();
+        if (attempt < MAX_RETRIES) {
+          const retryDelay = BASE_RETRY_DELAY_MS * Math.pow(2, attempt);
+          console.log(`[Gemini] Rate limited, retrying in ${retryDelay / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})`);
+          await sleep(retryDelay);
+          continue;
+        }
+        console.log('[Gemini] Rate limited after all retries. Entering 60s cooldown.');
+        return null;
       }
       
-      console.error(`[Gemini] Error generating content (attempt ${attempt + 1}):`, error?.message || error);
+      console.error(`[Gemini] Error (attempt ${attempt + 1}):`, error?.message || error);
       return null;
     }
   }

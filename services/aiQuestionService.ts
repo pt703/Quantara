@@ -1,4 +1,4 @@
-import { generateJSON, isGeminiConfigured } from '@/lib/gemini';
+import { generateJSON, isGeminiConfigured, isRateLimited } from '@/lib/gemini';
 import { 
   Question, 
   MCQQuestion, 
@@ -475,7 +475,7 @@ Respond with just the insight text, no JSON or formatting.
 }
 
 export function canGenerateAIQuestions(): boolean {
-  return isGeminiConfigured();
+  return isGeminiConfigured() && !isRateLimited();
 }
 
 export async function generateSimilarQuestion(
