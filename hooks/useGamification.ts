@@ -13,7 +13,7 @@
 //
 // =============================================================================
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useStorage } from './useStorage';
 import { 
   GamificationState, 
@@ -24,6 +24,7 @@ import {
   Achievement,
   AchievementCondition,
 } from '../types';
+import { syncGamification } from '@/services/supabaseDataService';
 
 // =============================================================================
 // CONSTANTS
@@ -283,6 +284,23 @@ export function useGamification() {
   // INITIALIZATION & HEART REGENERATION
   // ==========================================================================
 
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedSyncGamification = useCallback((s: GamificationState) => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      syncGamification({
+        hearts: s.hearts,
+        total_xp: s.xp,
+        today_xp: s.todayXPDate === todayStr ? (s.todayXP || 0) : 0,
+        level: s.level,
+        streak: s.streak,
+        last_activity_date: s.lastActiveDate || null,
+        today_date: s.todayXPDate || null,
+      }).catch(() => {});
+    }, 2000);
+  }, []);
+
   // When stored state loads or changes, apply heart regeneration and sync local state
   useEffect(() => {
     if (!isLoading && storedState) {
@@ -332,8 +350,9 @@ export function useGamification() {
 
     setState(newState);
     setStoredState(newState);
+    debouncedSyncGamification(newState);
     return true;
-  }, [state, setStoredState]);
+  }, [state, setStoredState, debouncedSyncGamification]);
 
   /**
    * Adds hearts (e.g., from watching an ad or buying).
@@ -418,9 +437,10 @@ export function useGamification() {
 
     setState(newState);
     setStoredState(newState);
+    debouncedSyncGamification(newState);
 
     return actualXP;
-  }, [state, setStoredState]);
+  }, [state, setStoredState, debouncedSyncGamification]);
 
   // ==========================================================================
   // STREAK MANAGEMENT
@@ -482,7 +502,8 @@ export function useGamification() {
 
     setState(newState);
     setStoredState(newState);
-  }, [state, setStoredState]);
+    debouncedSyncGamification(newState);
+  }, [state, setStoredState, debouncedSyncGamification]);
 
   /**
    * Checks if the streak has expired (more than 24 hours without a lesson).

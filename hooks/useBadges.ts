@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BADGES, Badge, BadgeCriteria } from '@/mock/badges';
 import { SkillDomain } from '@/types';
 import * as Haptics from '@/utils/haptics';
+import { syncBadgeProgress } from '@/services/supabaseDataService';
 
 const STORAGE_KEY = '@quantara/badges';
 const STATS_KEY = '@quantara/badge_stats';
@@ -153,6 +154,15 @@ export function useBadges(): UseBadgesReturn {
     } else {
       await AsyncStorage.setItem(STATS_KEY, JSON.stringify(updatedStats));
     }
+
+    syncBadgeProgress({
+      unlocked_badges: [...unlockedBadges, ...(newlyUnlocked.length > 0 ? newlyUnlocked.map(b => ({ badgeId: b.id, unlockedAt: new Date().toISOString() })) : [])].map(b => b.badgeId),
+      lesson_count: updatedStats.lessonCount,
+      quiz_count: updatedStats.quizCount,
+      perfect_quiz_count: updatedStats.perfectQuizCount,
+      total_xp: updatedStats.totalXp,
+      max_streak: updatedStats.currentStreak,
+    }).catch(() => {});
 
     return newlyUnlocked;
   }, [stats, unlockedBadges, isBadgeUnlocked, checkCriteria]);

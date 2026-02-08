@@ -8,6 +8,7 @@ import {
   DifficultyLevel,
   SkillDomain
 } from '@/types';
+import { getUserPerformanceSummary, UserPerformanceSummary } from '@/services/supabaseDataService';
 
 export interface UserFinancialContext {
   monthlyIncome?: number;
@@ -68,12 +69,107 @@ interface GeneratedScenario {
 
 type GeneratedQuestion = GeneratedMCQ | GeneratedTrueFalse | GeneratedCalculation | GeneratedScenario;
 
+let cachedPerformance: UserPerformanceSummary | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL = 60000;
+
+async function getPerformanceData(): Promise<UserPerformanceSummary | null> {
+  const now = Date.now();
+  if (cachedPerformance && (now - cacheTimestamp) < CACHE_TTL) {
+    return cachedPerformance;
+  }
+  try {
+    cachedPerformance = await getUserPerformanceSummary();
+    cacheTimestamp = now;
+    if (cachedPerformance) {
+      console.log('[AI] Fetched performance data from Supabase:', {
+        quizzes: cachedPerformance.totalQuizzesTaken,
+        accuracy: cachedPerformance.overallAccuracy + '%',
+        weak: cachedPerformance.weakDomains,
+        strong: cachedPerformance.strongDomains,
+      });
+    }
+    return cachedPerformance;
+  } catch (err) {
+    console.log('[AI] Could not fetch performance data:', err);
+    return null;
+  }
+}
+
+function buildPerformanceContext(perf: UserPerformanceSummary | null): string {
+  if (!perf || perf.totalQuizzesTaken === 0) {
+    return 'No quiz history available yet. This appears to be a new learner.';
+  }
+
+  const domainLines = Object.entries(perf.domainAccuracy)
+    .map(([domain, acc]) => {
+      const pct = acc.total > 0 ? Math.round((acc.correct / acc.total) * 100) : 0;
+      return `  - ${domain}: ${pct}% (${acc.correct}/${acc.total} correct)`;
+    })
+    .join('\n');
+
+  const mistakeLines = perf.recentMistakes.length > 0
+    ? perf.recentMistakes
+        .slice(0, 5)
+        .map(m => `  - Missed: ${m.conceptId} (${m.domain}, ${m.difficulty})`)
+        .join('\n')
+    : '  None recent';
+
+  return `
+User's Learning Performance (from database):
+- Total questions answered: ${perf.totalQuizzesTaken}
+- Overall accuracy: ${perf.overallAccuracy}%
+- Lessons completed: ${perf.lessonsCompleted}
+- Current streak: ${perf.streak} days
+- Total XP: ${perf.totalXp}
+- Weak areas: ${perf.weakDomains.length > 0 ? perf.weakDomains.join(', ') : 'None identified yet'}
+- Strong areas: ${perf.strongDomains.length > 0 ? perf.strongDomains.join(', ') : 'None identified yet'}
+
+Accuracy by domain:
+${domainLines || '  No domain data yet'}
+
+Recent mistakes:
+${mistakeLines}
+
+ADAPTIVE INSTRUCTIONS:
+${perf.weakDomains.length > 0 ? `- The user struggles with ${perf.weakDomains.join(' and ')}. If this question is in a weak area, make it slightly easier and include more educational context in the explanation.` : ''}
+${perf.strongDomains.length > 0 ? `- The user is strong in ${perf.strongDomains.join(' and ')}. If this question is in a strong area, make it more challenging.` : ''}
+${perf.overallAccuracy < 50 ? '- Overall accuracy is low. Use simpler language and more concrete examples.' : ''}
+${perf.overallAccuracy > 80 ? '- User is performing well. Increase complexity and test deeper understanding.' : ''}
+`;
+}
+
 function getDifficultyTier(difficulty: DifficultyLevel): 1 | 2 | 3 {
   switch (difficulty) {
     case 'beginner': return 1;
     case 'intermediate': return 2;
     case 'advanced': return 3;
   }
+}
+
+function getAdaptiveDifficulty(
+  requestedDifficulty: DifficultyLevel,
+  domain: SkillDomain,
+  perf: UserPerformanceSummary | null
+): DifficultyLevel {
+  if (!perf || perf.totalQuizzesTaken < 5) return requestedDifficulty;
+
+  const domainAcc = perf.domainAccuracy[domain];
+  if (!domainAcc || domainAcc.total < 3) return requestedDifficulty;
+
+  const pct = (domainAcc.correct / domainAcc.total) * 100;
+
+  if (pct < 40 && requestedDifficulty !== 'beginner') {
+    return 'beginner';
+  }
+  if (pct > 85 && requestedDifficulty === 'beginner') {
+    return 'intermediate';
+  }
+  if (pct > 90 && requestedDifficulty === 'intermediate') {
+    return 'advanced';
+  }
+
+  return requestedDifficulty;
 }
 
 export async function generatePersonalizedQuestion(
@@ -85,6 +181,13 @@ export async function generatePersonalizedQuestion(
   }
 
   const { conceptId, conceptName, domain, difficulty, lessonTitle, lessonContent, userContext } = request;
+
+  const performanceData = await getPerformanceData();
+
+  const adaptedDifficulty = getAdaptiveDifficulty(difficulty, domain, performanceData);
+  if (adaptedDifficulty !== difficulty) {
+    console.log(`[AI] Adapted difficulty: ${difficulty} -> ${adaptedDifficulty} for domain ${domain}`);
+  }
 
   const userContextString = userContext
     ? `
@@ -98,16 +201,19 @@ User's Financial Context (use these real numbers to personalize the question):
 `
     : 'No specific user financial data available. Use realistic example numbers.';
 
-  const questionType = selectQuestionType(difficulty, domain);
+  const performanceContext = buildPerformanceContext(performanceData);
+
+  const questionType = selectQuestionType(adaptedDifficulty, domain);
 
   const prompt = buildPrompt(questionType, {
     conceptId,
     conceptName,
     domain,
-    difficulty,
+    difficulty: adaptedDifficulty,
     lessonTitle,
     lessonContent,
     userContextString,
+    performanceContext,
   });
 
   try {
@@ -118,14 +224,14 @@ User's Financial Context (use these real numbers to personalize the question):
     }
 
     const questionId = `ai-${conceptId}-${Date.now()}`;
-    const difficultyTier = getDifficultyTier(difficulty);
+    const difficultyTier = getDifficultyTier(adaptedDifficulty);
 
     return formatQuestion(generated, {
       id: questionId,
       conceptId,
       variantGroup: `ai-${conceptId}`,
       difficultyTier,
-      difficulty,
+      difficulty: adaptedDifficulty,
       xpReward: difficultyTier * 5,
     });
   } catch (error) {
@@ -155,6 +261,7 @@ interface PromptContext {
   lessonTitle: string;
   lessonContent: string;
   userContextString: string;
+  performanceContext: string;
 }
 
 function buildPrompt(
@@ -174,9 +281,14 @@ ${context.lessonContent.substring(0, 1000)}
 
 ${context.userContextString}
 
+${context.performanceContext}
+
 Guidelines:
 - Make the question practical and relatable
 - If user financial data is provided, personalize the question using their actual numbers
+- Adapt the difficulty based on the user's performance data above
+- If the user is weak in this domain, include extra educational context in the explanation
+- If the user is strong in this domain, test deeper understanding
 - Ensure the question tests understanding, not just memorization
 - The explanation should teach why the answer is correct
 - Use simple, clear language
@@ -329,6 +441,11 @@ export async function generatePersonalizedInsight(
     return null;
   }
 
+  const performanceData = await getPerformanceData();
+  const performanceContext = performanceData
+    ? `\nLearning Progress: ${performanceData.totalQuizzesTaken} questions answered, ${performanceData.overallAccuracy}% accuracy, ${performanceData.lessonsCompleted} lessons completed.`
+    : '';
+
   const prompt = `
 You are a friendly financial advisor giving personalized advice.
 
@@ -338,6 +455,7 @@ User's Financial Snapshot:
 - Savings Goal: ${userContext.savingsGoal ? `$${userContext.savingsGoal}` : 'Not specified'}
 - Current Savings: ${userContext.currentSavings ? `$${userContext.currentSavings}` : 'Not specified'}
 - Monthly Debt Payments: ${userContext.monthlyDebt ? `$${userContext.monthlyDebt}` : 'Not specified'}
+${performanceContext}
 
 Topic: ${topic}
 
@@ -360,10 +478,6 @@ export function canGenerateAIQuestions(): boolean {
   return isGeminiConfigured();
 }
 
-/**
- * Generate a similar question based on an original question the user got wrong.
- * This creates variety in the learning experience instead of repeating the exact same question.
- */
 export async function generateSimilarQuestion(
   originalQuestion: Question,
   attemptNumber: number = 1
@@ -372,6 +486,9 @@ export async function generateSimilarQuestion(
     console.log('Gemini not configured, returning null for similar question');
     return null;
   }
+
+  const performanceData = await getPerformanceData();
+  const performanceContext = buildPerformanceContext(performanceData);
 
   const typeDescriptions: Record<string, string> = {
     'mcq': 'multiple choice with 4 options',
@@ -391,10 +508,13 @@ ${originalQuestion.type === 'calculation' ? `Problem: ${(originalQuestion as Cal
 ${originalQuestion.type === 'mcq' ? `Options: ${(originalQuestion as MCQQuestion).options.join(', ')}` : ''}
 Explanation: ${originalQuestion.explanation}
 
+${performanceContext}
+
 REQUIREMENTS:
 - Create a NEW question that tests the SAME concept but with DIFFERENT numbers/scenarios
 - Keep the same question type: ${typeDescriptions[originalQuestion.type] || originalQuestion.type}
 - Make it slightly ${attemptNumber > 1 ? 'easier' : 'similar in difficulty'}
+${performanceData && performanceData.weakDomains.includes(originalQuestion.difficulty || '') ? '- This is in a weak area for the user - include extra teaching in the explanation' : ''}
 - Use different example numbers or scenarios
 - The question should feel fresh, not repetitive
 
@@ -468,7 +588,7 @@ Respond with JSON:
       variantGroup: originalQuestion.variantGroup || `similar-${originalQuestion.id}`,
       difficultyTier: originalQuestion.difficultyTier || 2,
       difficulty: originalQuestion.difficulty || 'intermediate',
-      xpReward: Math.round(originalQuestion.xpReward * 0.75), // Slightly less XP for retry
+      xpReward: Math.round(originalQuestion.xpReward * 0.75),
     });
   } catch (error) {
     console.error('Error generating similar question:', error);
