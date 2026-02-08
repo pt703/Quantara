@@ -478,6 +478,69 @@ export function canGenerateAIQuestions(): boolean {
   return isGeminiConfigured() && !isRateLimited();
 }
 
+export async function generateConceptQuestion(
+  originalQuestion: Question,
+  conceptId: string,
+  conceptName: string,
+  domain: SkillDomain,
+  difficulty: DifficultyLevel,
+  userContext?: UserFinancialContext
+): Promise<Question | null> {
+  if (!canGenerateAIQuestions()) {
+    return null;
+  }
+
+  const performanceData = await getPerformanceData();
+  const performanceContext = buildPerformanceContext(performanceData);
+
+  const adaptedDifficulty = getAdaptiveDifficulty(difficulty, domain, performanceData);
+
+  const userContextString = userContext
+    ? `
+User's Financial Context:
+- Monthly Income: ${userContext.monthlyIncome ? `$${userContext.monthlyIncome}` : 'Not specified'}
+- Monthly Expenses: ${userContext.monthlyExpenses ? `$${userContext.monthlyExpenses}` : 'Not specified'}
+- Savings Goal: ${userContext.savingsGoal ? `$${userContext.savingsGoal}` : 'Not specified'}
+- Current Savings: ${userContext.currentSavings ? `$${userContext.currentSavings}` : 'Not specified'}
+`
+    : '';
+
+  const questionType = selectQuestionType(adaptedDifficulty, domain);
+
+  const prompt = buildPrompt(questionType, {
+    conceptId,
+    conceptName,
+    domain,
+    difficulty: adaptedDifficulty,
+    lessonTitle: conceptName,
+    lessonContent: `Original question for reference: "${originalQuestion.question}". Generate a DIFFERENT question testing the same concept "${conceptName}" but with different wording, numbers, or scenarios.`,
+    userContextString,
+    performanceContext,
+  });
+
+  try {
+    const generated = await generateJSON<GeneratedQuestion>(prompt);
+    if (!generated) return null;
+
+    const questionId = `ai-concept-${conceptId}-${difficulty}-${Date.now()}`;
+    const difficultyTier = getDifficultyTier(adaptedDifficulty);
+
+    console.log(`[AI] Generated ${difficulty} question for concept "${conceptName}"`);
+
+    return formatQuestion(generated, {
+      id: questionId,
+      conceptId,
+      variantGroup: `ai-${conceptId}`,
+      difficultyTier,
+      difficulty: adaptedDifficulty,
+      xpReward: originalQuestion.xpReward || difficultyTier * 5,
+    });
+  } catch (error) {
+    console.error('[AI] Failed to generate concept question:', error);
+    return null;
+  }
+}
+
 export async function generateSimilarQuestion(
   originalQuestion: Question,
   attemptNumber: number = 1

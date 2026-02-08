@@ -65,6 +65,8 @@ import { getQuestionById, getLessonById } from '../mock/courses';
 import { Confetti } from '@/components/Confetti';
 import * as Haptics from '@/utils/haptics';
 import { recordQuizResult as recordQuizResultToBackend, syncLessonProgress } from '@/services/supabaseDataService';
+import { generateConceptQuestion, canGenerateAIQuestions } from '@/services/aiQuestionService';
+import { useUserDataContext } from '@/context/UserDataContext';
 
 // =============================================================================
 // TYPES
@@ -99,6 +101,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   const { registerWrongAnswer, markRemediated } = useWrongAnswerRegistry();
   const { recordQuizResult } = useSkillAccuracy();
   const { recordLessonAttempt } = useAdaptiveLearning(streak);
+  const { financial } = useUserDataContext();
   
   // Get module data from route params
   const module = route.params.module as QuizModule | undefined;
@@ -147,6 +150,9 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalAttempts, setTotalAttempts] = useState(0);
 
+  // AI-generated replacement questions (keyed by queue index)
+  const [aiReplacements, setAiReplacements] = useState<Record<number, Question>>({});
+  
   // Animation values
   const progressWidth = useSharedValue(0);
   const xpScale = useSharedValue(1);
@@ -204,6 +210,35 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         });
         setConceptResults(initialResults);
         setQuestionQueue(initialQueue);
+
+        // Try to generate AI replacements for each hard question in background
+        if (canGenerateAIQuestions()) {
+          const userCtx = financial ? {
+            monthlyIncome: financial.monthlyIncome,
+            monthlyExpenses: financial.monthlyExpenses,
+            savingsGoal: financial.savingsGoal,
+            currentSavings: financial.currentSavings,
+            monthlyDebt: financial.totalDebt,
+          } : undefined;
+
+          initialQueue.forEach((item, index) => {
+            const cv = module.conceptVariants!.find(c => c.conceptId === item.conceptId);
+            if (cv) {
+              generateConceptQuestion(
+                item.question,
+                cv.conceptId,
+                cv.conceptName,
+                cv.domain as any,
+                'advanced',
+                userCtx
+              ).then(aiQ => {
+                if (aiQ) {
+                  setAiReplacements(prev => ({ ...prev, [index]: aiQ }));
+                }
+              }).catch(() => {});
+            }
+          });
+        }
         
       } else {
         // =================================================================
@@ -224,9 +259,9 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
     }
   }, [module, questionQueue.length]);
 
-  // Current question
+  // Current question - use AI replacement if available, otherwise pre-made
   const currentQueueItem = questionQueue[currentIndex];
-  const currentQuestion = currentQueueItem?.question;
+  const currentQuestion = aiReplacements[currentIndex] || currentQueueItem?.question;
   
   // Count of concepts to master (or original question count for legacy mode)
   const totalConceptsToMaster = module?.conceptVariants?.length || module?.questions.length || 0;
@@ -407,7 +442,39 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
           }
           
           // Add penalty cascade to queue
-          setQuestionQueue(prev => [...prev, ...penaltyQuestions]);
+          setQuestionQueue(prev => {
+            const newQueue = [...prev, ...penaltyQuestions];
+            
+            // Try to generate AI replacements for penalty cascade questions in background
+            if (canGenerateAIQuestions() && conceptVariant) {
+              const userCtx = financial ? {
+                monthlyIncome: financial.monthlyIncome,
+                monthlyExpenses: financial.monthlyExpenses,
+                savingsGoal: financial.savingsGoal,
+                currentSavings: financial.currentSavings,
+                monthlyDebt: financial.totalDebt,
+              } : undefined;
+
+              const difficulties: Array<'beginner' | 'intermediate' | 'advanced'> = ['beginner', 'intermediate', 'advanced'];
+              penaltyQuestions.forEach((pq, i) => {
+                const queueIdx = prev.length + i;
+                generateConceptQuestion(
+                  pq.question,
+                  conceptId!,
+                  conceptVariant.conceptName,
+                  conceptVariant.domain as any,
+                  difficulties[i] || 'intermediate',
+                  userCtx
+                ).then(aiQ => {
+                  if (aiQ) {
+                    setAiReplacements(prevR => ({ ...prevR, [queueIdx]: aiQ }));
+                  }
+                }).catch(() => {});
+              });
+            }
+            
+            return newQueue;
+          });
           
           // Mark concept as in cascade (prevent re-injection)
           setConceptsInCascade(prev => new Set([...prev, conceptId]));
