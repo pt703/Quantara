@@ -8,13 +8,15 @@ import {
 } from '@/services/aiQuestionService';
 import { Question, DifficultyLevel, SkillDomain } from '@/types';
 import { useUserData } from './useUserData';
+import { useLearningMode } from './useLearningMode';
 
 export function useAIQuestions() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { financial } = useUserData();
+  const { isAdaptive } = useLearningMode();
 
-  const isAvailable = canGenerateAIQuestions();
+  const isAvailable = isAdaptive && canGenerateAIQuestions();
 
   const getUserContext = useCallback((): UserFinancialContext => {
     if (!financial) return {};

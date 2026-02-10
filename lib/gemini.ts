@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 const GEMINI_API_KEY = Constants.expoConfig?.extra?.geminiApiKey || 
   process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
 
-const MODEL_NAME = 'gemini-2.0-flash';
+const MODEL_NAME = 'gemini-2.5-flash';
 const MAX_RETRIES = 2;
 const BASE_RETRY_DELAY_MS = 5000;
 const MIN_REQUEST_INTERVAL_MS = 4000;

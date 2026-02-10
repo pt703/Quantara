@@ -3,9 +3,10 @@
 // =============================================================================
 // 
 // This file contains the complete course curriculum for the Quantara app.
-// Two comprehensive courses with 11 lessons each, covering:
+// Comprehensive courses with 11 lessons each, covering:
 // 1. Money Foundations (Budgeting & Cashflow)
 // 2. Credit & Debt Navigation
+// 3. Investing Essentials
 //
 // Each lesson contains a mix of question types for engaging, Duolingo-style
 // learning. Question types include MCQ, True/False, Fill-in-blank, Matching,
@@ -31,6 +32,8 @@ import {
   ConceptVariant,
 } from '../types';
 
+type RawLesson = Omit<Lesson, 'modules'>;
+
 // =============================================================================
 // MODULE GENERATION HELPER
 // =============================================================================
@@ -51,6 +54,12 @@ function generateModulesForLesson(lesson: {
   questions: Question[];
   domain: string;
 }): LessonModule[] {
+  const sanitizeReadingText = (text: string): string => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '$1')   // remove markdown bold markers
+      .replace(/^-\s+/gm, '• ');         // normalize list bullets for mobile readability
+  };
+
   const modules: LessonModule[] = [];
   
   // Parse content into sections for reading modules
@@ -59,7 +68,9 @@ function generateModulesForLesson(lesson: {
   const subSections = contentSections.slice(1);
   
   // Extract title from main section
-  const mainContent = mainSection.replace(/^#\s+.*\n+/, '').trim();
+  const mainContent = sanitizeReadingText(
+    mainSection.replace(/^#\s+.*\n+/, '').trim()
+  );
   
   // Reading Module 1: Introduction
   // Sets the stage with overview and why this topic matters
@@ -69,11 +80,18 @@ function generateModulesForLesson(lesson: {
       content: mainContent || `Welcome to this lesson on ${lesson.title}. Let's explore the key concepts that will help you master this topic.`,
       animationPreset: 'fade_in',
     },
+    // {
+    //   type: 'image',
+    //   content: 'Visual summary to anchor the key concept before you continue.',
+    //   imageKey: lesson.domain === 'budgeting' ? 'welcome-hero' : 'app-logo',
+    //   imageAlt: `${lesson.title} visual`,
+    //   animationPreset: 'fade_in',
+    // },
   ];
   
   // Add a highlight block if there's a first subsection
   if (subSections[0]) {
-    const firstSub = subSections[0].split('\n').filter(l => l.trim());
+    const firstSub = sanitizeReadingText(subSections[0]).split('\n').filter(l => l.trim());
     introBlocks.push({
       type: 'highlight',
       content: firstSub.slice(1).join('\n\n') || firstSub[0],
@@ -96,7 +114,7 @@ function generateModulesForLesson(lesson: {
   const conceptBlocks: ContentBlock[] = [];
   
   subSections.slice(1, 3).forEach((section, idx) => {
-    const lines = section.split('\n').filter(l => l.trim());
+    const lines = sanitizeReadingText(section).split('\n').filter(l => l.trim());
     const title = lines[0] || '';
     const body = lines.slice(1).join('\n\n');
     
@@ -131,7 +149,7 @@ function generateModulesForLesson(lesson: {
   const practicalBlocks: ContentBlock[] = [];
   
   subSections.slice(3).forEach((section, idx) => {
-    const lines = section.split('\n').filter(l => l.trim());
+    const lines = sanitizeReadingText(section).split('\n').filter(l => l.trim());
     const title = lines[0] || '';
     const body = lines.slice(1).join('\n\n');
     
@@ -227,7 +245,7 @@ function generateModulesForLesson(lesson: {
     estimatedMinutes: 5,
     xpReward: 30,
     questions: lesson.questions,
-    masteryThreshold: 0.8,
+    masteryThreshold: 0.7,
     conceptTags: lesson.questions.map(q => q.id),
     // Include concept variants for adaptive quiz flow
     conceptVariants: conceptVariants.length > 0 ? conceptVariants : undefined,
@@ -236,11 +254,55 @@ function generateModulesForLesson(lesson: {
   return modules;
 }
 
+function normalizeQuestionsForAdaptive(
+  lessonId: string,
+  domain: string,
+  questions: Question[]
+): Question[] {
+  const tierFromDifficulty: Record<string, 1 | 2 | 3> = {
+    beginner: 1,
+    intermediate: 2,
+    advanced: 3,
+  };
+
+  return questions.map((question, index) => {
+    const q = { ...(question as any) };
+    const positionTier = ((index % 3) + 1) as 1 | 2 | 3;
+
+    const conceptId =
+      typeof q.conceptId === 'string' && q.conceptId.length > 0
+        ? q.conceptId
+        : `${lessonId}-${q.id}`;
+
+    const difficultyTier: 1 | 2 | 3 =
+      q.difficultyTier === 1 || q.difficultyTier === 2 || q.difficultyTier === 3
+        ? q.difficultyTier
+        : tierFromDifficulty[q.difficulty] || positionTier;
+
+    const variantGroup =
+      typeof q.variantGroup === 'string' && q.variantGroup.length > 0
+        ? q.variantGroup
+        : `${lessonId}-${conceptId}-v1`;
+
+    const difficulty =
+      q.difficulty ||
+      (difficultyTier === 1 ? 'beginner' : difficultyTier === 2 ? 'intermediate' : 'advanced');
+
+    return {
+      ...q,
+      conceptId,
+      variantGroup,
+      difficultyTier,
+      difficulty,
+    } as Question;
+  });
+}
+
 // =============================================================================
 // COURSE 1: MONEY FOUNDATIONS
 // =============================================================================
 
-const moneyFoundationsLessons: Lesson[] = [
+const moneyFoundationsLessons: RawLesson[] = [
   // -------------------------------------------------------------------------
   // LESSON 1: What is a Budget?
   // -------------------------------------------------------------------------
@@ -1433,7 +1495,7 @@ Take your time and think through each question carefully. Good luck!`,
 // COURSE 2: CREDIT & DEBT NAVIGATION
 // =============================================================================
 
-const creditDebtLessons: Lesson[] = [
+const creditDebtLessons: RawLesson[] = [
   // -------------------------------------------------------------------------
   // LESSON 1: Understanding Credit Scores
   // -------------------------------------------------------------------------
@@ -2337,15 +2399,992 @@ Apply your knowledge carefully. You've got this!`,
 ];
 
 // =============================================================================
+// COURSE 3: INVESTING ESSENTIALS
+// =============================================================================
+
+type InvestingConceptTemplate = {
+  conceptId: string;
+  conceptName: string;
+  easyStatement: string;
+  easyAnswer: boolean;
+  easyExplanation: string;
+  mediumQuestion: string;
+  mediumOptions: string[];
+  mediumCorrectAnswer: number;
+  mediumExplanation: string;
+  hardQuestion: string;
+  hardOptions: string[];
+  hardCorrectAnswer: number;
+  hardExplanation: string;
+};
+
+function buildInvestingConceptQuestions(
+  lessonTag: string,
+  template: InvestingConceptTemplate
+): Question[] {
+  const variantGroup = `${lessonTag}-${template.conceptId}`;
+
+  return [
+    {
+      id: `${lessonTag}-${template.conceptId}-easy`,
+      type: 'true_false',
+      question: template.easyStatement,
+      correctAnswer: template.easyAnswer,
+      explanation: template.easyExplanation,
+      xpReward: 5,
+      difficulty: 'beginner',
+      conceptId: template.conceptId,
+      variantGroup,
+      difficultyTier: 1,
+    } as TrueFalseQuestion,
+    {
+      id: `${lessonTag}-${template.conceptId}-medium`,
+      type: 'mcq',
+      question: template.mediumQuestion,
+      options: template.mediumOptions,
+      correctAnswer: template.mediumCorrectAnswer,
+      explanation: template.mediumExplanation,
+      xpReward: 10,
+      difficulty: 'intermediate',
+      conceptId: template.conceptId,
+      variantGroup,
+      difficultyTier: 2,
+    } as MCQQuestion,
+    {
+      id: `${lessonTag}-${template.conceptId}-hard`,
+      type: 'mcq',
+      question: template.hardQuestion,
+      options: template.hardOptions,
+      correctAnswer: template.hardCorrectAnswer,
+      explanation: template.hardExplanation,
+      xpReward: 15,
+      difficulty: 'advanced',
+      conceptId: template.conceptId,
+      variantGroup,
+      difficultyTier: 3,
+    } as MCQQuestion,
+  ];
+}
+
+function buildInvestingLesson(
+  lessonTag: string,
+  lesson: Omit<RawLesson, 'type' | 'completionStatus' | 'domain' | 'xpReward' | 'questions'> & {
+    concepts: InvestingConceptTemplate[];
+  }
+): RawLesson {
+  return {
+    id: lesson.id,
+    title: lesson.title,
+    type: 'mixed',
+    estimatedMinutes: lesson.estimatedMinutes,
+    completionStatus: 'not_started',
+    domain: 'investing',
+    difficulty: lesson.difficulty,
+    xpReward: 50,
+    content: lesson.content,
+    questions: lesson.concepts.flatMap((concept) =>
+      buildInvestingConceptQuestions(lessonTag, concept)
+    ),
+  };
+}
+
+const investingLessons: RawLesson[] = [
+  buildInvestingLesson('inv-f1', {
+    id: 'inv-lesson-f1',
+    title: 'Assets, Liabilities, and Net Worth',
+    estimatedMinutes: 10,
+    difficulty: 'beginner',
+    content: `# Assets, Liabilities, and Net Worth
+
+Before investing, you need to understand your financial position.
+
+## Asset vs Liability
+
+An asset is something that adds value to your finances (cash, investments, property that generates value).  
+A liability is something you owe (credit card balance, loan, mortgage debt).
+
+## Net Worth Formula
+
+Net worth = Total Assets - Total Liabilities.  
+Growing net worth over time is a core financial goal.
+
+## Why This Matters for Investors
+
+Investing works best when your cash flow and balance sheet are healthy.  
+You need to know what you own, what you owe, and what can grow.`,
+    concepts: [
+      {
+        conceptId: 'asset-liability-basics',
+        conceptName: 'Asset and liability basics',
+        easyStatement: 'A credit card balance is a liability.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. It is money you owe, so it is a liability.',
+        mediumQuestion: 'Which is most clearly an asset?',
+        mediumOptions: ['Unpaid credit card bill', 'Car loan balance', 'Cash in your savings account', 'Late utility payment'],
+        mediumCorrectAnswer: 2,
+        mediumExplanation: 'Cash you own is an asset.',
+        hardQuestion: 'A house you live in with a mortgage is best described as:',
+        hardOptions: ['Only an asset', 'Only a liability', 'A property asset with an associated loan liability', 'Neither asset nor liability'],
+        hardCorrectAnswer: 2,
+        hardExplanation: 'The property is an asset; the mortgage is a liability.',
+      },
+      {
+        conceptId: 'net-worth-foundation',
+        conceptName: 'Net worth calculation',
+        easyStatement: 'Net worth is assets minus liabilities.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. This is the core balance-sheet equation.',
+        mediumQuestion: 'If assets are $30,000 and liabilities are $12,000, net worth is:',
+        mediumOptions: ['$18,000', '$42,000', '$12,000', '$30,000'],
+        mediumCorrectAnswer: 0,
+        mediumExplanation: '$30,000 - $12,000 = $18,000.',
+        hardQuestion: 'Which action most directly improves net worth?',
+        hardOptions: ['Taking on high-interest debt for consumption', 'Paying down liabilities while growing investments', 'Ignoring debt statements', 'Buying random assets with borrowed money'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Reducing liabilities and increasing productive assets improves net worth fastest.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-f2', {
+    id: 'inv-lesson-f2',
+    title: 'Active Income vs Passive Income',
+    estimatedMinutes: 10,
+    difficulty: 'beginner',
+    content: `# Active Income vs Passive Income
+
+Income quality matters as much as income amount.
+
+## Active Income
+
+Active income usually requires your ongoing time (salary, freelance, hourly work).
+
+## Passive Income
+
+Passive income comes from systems or assets (dividends, interest, rental cash flow, royalties, businesses with operators).
+
+## Investor Mindset
+
+Use active income to build capital.  
+Then allocate capital into assets that can generate more passive income over time.`,
+    concepts: [
+      {
+        conceptId: 'active-passive-basics',
+        conceptName: 'Active and passive income basics',
+        easyStatement: 'Salary from your day job is typically active income.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. It usually depends on your ongoing labor.',
+        mediumQuestion: 'Which is most likely passive income?',
+        mediumOptions: ['Overtime pay', 'Freelance project payment', 'Dividend payout from ETF shares', 'Hourly consulting'],
+        mediumCorrectAnswer: 2,
+        mediumExplanation: 'Dividends are paid by assets you own, not direct hourly labor.',
+        hardQuestion: 'Best long-term strategy for most beginners?',
+        hardOptions: ['Rely only on one income source forever', 'Use active income to build diversified income-producing assets', 'Avoid saving and invest randomly', 'Use debt for lifestyle expansion'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Active income can fund investments that later produce passive cash flow.',
+      },
+      {
+        conceptId: 'income-systems-thinking',
+        conceptName: 'Building income systems',
+        easyStatement: 'Building passive income generally takes time and upfront effort or capital.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Passive systems are usually built, not instant.',
+        mediumQuestion: 'Why is passive income valuable for investors?',
+        mediumOptions: ['It removes all risk', 'It can reduce dependence on trading time for money', 'It guarantees fast wealth', 'It replaces budgeting'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Passive income can improve resilience and financial flexibility.',
+        hardQuestion: 'If passive income is low today, what is a practical first move?',
+        hardOptions: ['Quit your active job immediately', 'Increase savings rate and automate investment contributions', 'Trade leveraged products daily', 'Ignore cash flow tracking'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Consistency in saving and investing is the practical bridge to future passive income.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-f3', {
+    id: 'inv-lesson-f3',
+    title: 'Inflation, Purchasing Power, and Why We Invest',
+    estimatedMinutes: 11,
+    difficulty: 'beginner',
+    content: `# Inflation, Purchasing Power, and Why We Invest
+
+One core reason to invest: cash can lose purchasing power over time.
+
+## Inflation Basics
+
+If inflation is 5% and your cash earns 1%, your real purchasing power declines.
+
+## Monetary Expansion and Liquidity
+
+Central banks can increase liquidity (for example during quantitative easing) to support credit and economic activity.  
+Over long periods, increases in money supply and demand conditions can contribute to price pressures.
+
+## Investor Takeaway
+
+You invest to seek returns above inflation over the long run, while managing risk and staying diversified.`,
+    concepts: [
+      {
+        conceptId: 'inflation-real-return',
+        conceptName: 'Inflation and real return',
+        easyStatement: 'If your return is lower than inflation, your purchasing power may shrink.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Real return is roughly nominal return minus inflation.',
+        mediumQuestion: 'If inflation is 5% and your cash return is 1%, your approximate real return is:',
+        mediumOptions: ['+4%', '0%', '-4%', '+6%'],
+        mediumCorrectAnswer: 2,
+        mediumExplanation: '1% - 5% = about -4% real return.',
+        hardQuestion: 'Main long-term reason to invest instead of holding all cash?',
+        hardOptions: ['To eliminate all uncertainty', 'To improve chance of beating inflation over time', 'To avoid budgeting', 'To guarantee short-term profits'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Investing aims to preserve and grow purchasing power over long horizons.',
+      },
+      {
+        conceptId: 'qe-liquidity-context',
+        conceptName: 'QE and liquidity context',
+        easyStatement: 'Central banks may inject liquidity to support economic activity during weak periods.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Policy can influence credit conditions and demand.',
+        mediumQuestion: 'Which statement is most accurate?',
+        mediumOptions: ['QE always causes identical inflation instantly', 'Policy, supply, and demand all interact in inflation outcomes', 'Money supply never affects prices', 'Inflation is only caused by wages'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Inflation outcomes are multi-factor and context-dependent.',
+        hardQuestion: 'What should a beginner do with this macro knowledge?',
+        hardOptions: ['Trade news every hour', 'Build a long-term diversified plan and focus on real returns', 'Stop investing completely', 'Use leverage because inflation exists'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Macro context is useful, but disciplined long-term execution matters more than reactive trading.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-f4', {
+    id: 'inv-lesson-f4',
+    title: 'Goals, Time Horizon, and Retirement Targets',
+    estimatedMinutes: 11,
+    difficulty: 'beginner',
+    content: `# Goals, Time Horizon, and Retirement Targets
+
+Investing without a target is guesswork.
+
+## Define the Goal
+
+Example: "Retire in 30 years with enough income to cover annual expenses."
+
+## Time Horizon
+
+Your horizon shapes risk level: longer horizons can typically accept more volatility.
+
+## Backward Planning
+
+Estimate future annual spending, expected portfolio withdrawal rate, and required capital.  
+Then estimate monthly savings/investment contributions needed to get there.`,
+    concepts: [
+      {
+        conceptId: 'goal-time-horizon-link',
+        conceptName: 'Goal and horizon alignment',
+        easyStatement: 'Your investment strategy should depend on when you need the money.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Time horizon strongly affects suitable risk.',
+        mediumQuestion: 'Which goal usually allows more equity exposure?',
+        mediumOptions: ['Vacation in 6 months', 'Down payment in 1 year', 'Retirement in 30 years', 'Emergency fund for this year'],
+        mediumCorrectAnswer: 2,
+        mediumExplanation: 'Longer horizons generally support higher volatility assets.',
+        hardQuestion: 'Best first step before choosing funds?',
+        hardOptions: ['Copy someone else portfolio', 'Define goal amount and timeline', 'Trade trending assets', 'Focus only on daily market news'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Clear targets and timeline should drive portfolio design.',
+      },
+      {
+        conceptId: 'retirement-target-math',
+        conceptName: 'Retirement target basics',
+        easyStatement: 'Retirement planning includes estimating the capital you need.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. You need a target to calculate required saving pace.',
+        mediumQuestion: 'If annual retirement spending target is $40,000 and you use a 4% rule estimate, target capital is closest to:',
+        mediumOptions: ['$160,000', '$400,000', '$1,000,000', '$4,000,000'],
+        mediumCorrectAnswer: 2,
+        mediumExplanation: '$40,000 / 0.04 = $1,000,000 (simplified planning estimate).',
+        hardQuestion: 'If you are behind your retirement target, which is most controllable now?',
+        hardOptions: ['Past market returns', 'Increase contribution rate and optimize asset allocation to your profile', 'Guaranteed high returns', 'Completely eliminating market volatility'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Contribution rate, timeline, and allocation discipline are practical levers you control.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-f5', {
+    id: 'inv-lesson-f5',
+    title: 'Index Funds, S&P 500, and the Magnificent 7',
+    estimatedMinutes: 12,
+    difficulty: 'beginner',
+    content: `# Index Funds, S&P 500, and the Magnificent 7
+
+For many people, a broad index fund is the simplest high-quality starting point.
+
+## What Is an Index Fund?
+
+An index fund aims to track an index rather than beat it by stock-picking.  
+This gives broad diversification, low cost, and less decision fatigue.
+
+## What Is the S&P 500?
+
+The S&P 500 tracks 500 large U.S. companies.  
+Inclusion generally requires large market size, sufficient liquidity, U.S. listing standards, and profitability criteria set by the index committee.
+
+## Why This Matters
+
+You do not need to manually rotate capital between winners and losers.  
+The index methodology updates constituents over time.
+
+## Magnificent 7 and Concentration
+
+The "Mag 7" can represent a large share of index weight during certain periods.  
+That can boost returns, but it also means concentration risk is real.
+
+## Practical Takeaway
+
+A broad S&P 500 index fund can be a strong baseline, but many investors also add international diversification and align allocation with their risk profile.`,
+    concepts: [
+      {
+        conceptId: 'index-fund-baseline',
+        conceptName: 'Index fund baseline concept',
+        easyStatement: 'An index fund usually tracks an index instead of relying on one manager to pick stocks.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Index investing is typically rules-based and broad.',
+        mediumQuestion: 'Why do many beginners start with broad index funds?',
+        mediumOptions: [
+          'They remove all risk',
+          'They offer diversification and usually lower fees',
+          'They guarantee outperformance every year',
+          'They only hold small private companies'
+        ],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Diversification and low cost are key reasons index funds are common starting points.',
+        hardQuestion: 'What is the strongest argument for index funds as a baseline?',
+        hardOptions: [
+          'They always beat every active fund in every year',
+          'They combine broad market exposure, simplicity, and cost efficiency',
+          'They avoid any market drawdowns',
+          'They remove the need for any plan'
+        ],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Index funds are strong because they are broad, simple, and usually inexpensive.',
+      },
+      {
+        conceptId: 'sp500-selection-reality',
+        conceptName: 'S&P 500 inclusion reality',
+        easyStatement: 'S&P 500 membership is based on index rules and committee decisions, not social media popularity.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Inclusion follows methodology standards, including size and profitability requirements.',
+        mediumQuestion: 'Which statement about S&P 500 inclusion is most accurate?',
+        mediumOptions: [
+          'Any company with exactly $1B revenue is automatically included',
+          'Companies are screened by methodology factors such as size, liquidity, and profitability',
+          'Only tech companies can join',
+          'Members are permanent forever once included'
+        ],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Inclusion is criteria-based. It is not a simple fixed revenue threshold.',
+        hardQuestion: 'If a company no longer fits the index standards, what can happen?',
+        hardOptions: [
+          'It must stay forever',
+          'It can be removed and replaced under index methodology',
+          'The whole index is deleted',
+          'All funds stop operating'
+        ],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Indices are maintained over time; constituents can be replaced.',
+      },
+      {
+        conceptId: 'mag7-concentration-risk',
+        conceptName: 'Mag 7 concentration tradeoff',
+        easyStatement: 'Even diversified indices can become concentrated in a few mega-cap companies.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Weight concentration can rise when a few companies dominate market cap.',
+        mediumQuestion: 'What is a key risk when a few large companies dominate index weight?',
+        mediumOptions: [
+          'No risk increase at all',
+          'Portfolio becomes more sensitive to those few companies',
+          'The index becomes a bond fund',
+          'All smaller firms are removed immediately'
+        ],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Higher concentration means outcomes depend more on fewer names.',
+        hardQuestion: 'A prudent response to concentration concern is usually:',
+        hardOptions: [
+          'Panic-sell all index funds',
+          'Review allocation and consider broader diversification (for example global exposure)',
+          'Use maximum leverage on top holdings',
+          'Stop investing permanently'
+        ],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Better diversification decisions are generally stronger than emotional exits.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-1', {
+    id: 'inv-lesson-1',
+    title: 'What Is Investing and Why It Matters',
+    estimatedMinutes: 9,
+    difficulty: 'beginner',
+    content: `# What Is Investing and Why It Matters
+
+Investing means putting money into assets that can grow over time. Saving protects money; investing helps it compound.
+
+## Saving vs Investing
+
+Saving is for short-term goals and emergencies. Investing is for long-term goals such as retirement or future freedom.
+
+## Return and Risk
+
+Higher potential return usually comes with higher risk. The goal is to choose risk you can handle and stay consistent.
+
+## Time in the Market
+
+Starting early matters more than being perfect. Small monthly investments over years can become meaningful wealth.`,
+    concepts: [
+      {
+        conceptId: 'investing-purpose',
+        conceptName: 'Purpose of investing',
+        easyStatement: 'Investing is mainly for long-term growth, not next week spending.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Investing works best for long-term goals where short-term market swings are acceptable.',
+        mediumQuestion: 'Which goal is most appropriate for investing?',
+        mediumOptions: ['Rent due next month', 'Emergency medical bill', 'Retirement in 25 years', 'Phone bill next week'],
+        mediumCorrectAnswer: 2,
+        mediumExplanation: 'Long-term goals like retirement are better suited for investing.',
+        hardQuestion: 'A beginner says, "I will invest my emergency fund to earn more." What is the best response?',
+        hardOptions: ['Great idea, emergencies are rare', 'Keep emergency fund in cash-like savings and invest separate money', 'Put all cash into one stock', 'Use leverage to grow faster'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Emergency funds should stay liquid and stable. Invest separate long-term money.',
+      },
+      {
+        conceptId: 'risk-return-basics',
+        conceptName: 'Risk and return basics',
+        easyStatement: 'Higher expected investment returns usually involve taking more risk.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Risk and expected return are linked in investing.',
+        mediumQuestion: 'Which option is generally the highest risk?',
+        mediumOptions: ['Broad market ETF', 'Government bond fund', 'Single small-cap stock', 'Savings account'],
+        mediumCorrectAnswer: 2,
+        mediumExplanation: 'Single small-cap stocks are typically more volatile than diversified funds.',
+        hardQuestion: 'If you panic-sell during market drops, what should you likely change first?',
+        hardOptions: ['Increase trading frequency', 'Reduce risk level to match your tolerance', 'Buy only random stocks', 'Ignore diversification'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Your portfolio risk should match behavior. A lower-risk allocation helps you stay invested.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-2', {
+    id: 'inv-lesson-2',
+    title: 'Risk, Volatility, and Your Investor Profile',
+    estimatedMinutes: 9,
+    difficulty: 'beginner',
+    content: `# Risk, Volatility, and Your Investor Profile
+
+Volatility means prices move up and down. Risk is the chance you do not reach your goal.
+
+## Know Your Time Horizon
+
+If you need money soon, reduce risk. If your goal is far away, you can often accept more volatility.
+
+## Risk Tolerance vs Risk Capacity
+
+Tolerance is emotional comfort. Capacity is your financial ability to absorb losses. You need both aligned.`,
+    concepts: [
+      {
+        conceptId: 'volatility-vs-risk',
+        conceptName: 'Volatility versus real risk',
+        easyStatement: 'Volatility and risk are exactly the same thing.',
+        easyAnswer: false,
+        easyExplanation: 'Not exactly. Volatility is price movement; risk is failing your financial objective.',
+        mediumQuestion: 'For a 2-year goal, which approach is usually safer?',
+        mediumOptions: ['100% equities', 'Mostly cash and short-term bonds', 'Leveraged ETFs', 'Crypto-only portfolio'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Shorter goals usually need lower-volatility assets.',
+        hardQuestion: 'Who can typically hold more equity risk?',
+        hardOptions: ['Someone with unstable income and no emergency fund', 'Someone retiring next year', 'Someone with a 25-year horizon and stable cash flow', 'Someone who needs down payment in 12 months'],
+        hardCorrectAnswer: 2,
+        hardExplanation: 'Long horizon plus financial stability increases risk capacity.',
+      },
+      {
+        conceptId: 'risk-profile-fit',
+        conceptName: 'Matching portfolio to profile',
+        easyStatement: 'Your investment plan should match both your goals and your behavior.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. A good plan is one you can stick with through market cycles.',
+        mediumQuestion: 'What is a warning sign your portfolio risk is too high?',
+        mediumOptions: ['You invest automatically each month', 'You check balance monthly', 'You panic and sell after normal dips', 'You diversify across assets'],
+        mediumCorrectAnswer: 2,
+        mediumExplanation: 'Panic selling often means risk is above your tolerance.',
+        hardQuestion: 'Best fix for an anxious investor with long-term goals?',
+        hardOptions: ['Stop investing completely', 'Use diversified funds and slightly lower equity allocation', 'Trade daily to gain control', 'Concentrate in one hot stock'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'A diversified, slightly lower-risk plan improves consistency without quitting.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-3', {
+    id: 'inv-lesson-3',
+    title: 'Compound Growth and Time in Market',
+    estimatedMinutes: 10,
+    difficulty: 'beginner',
+    content: `# Compound Growth and Time in Market
+
+Compounding means returns can earn returns. Time is the engine behind wealth growth.
+
+## Why Starting Early Wins
+
+A smaller amount invested early can outperform larger amounts started late.
+
+## Consistency Beats Perfection
+
+Regular contributions matter more than trying to perfectly predict market tops and bottoms.`,
+    concepts: [
+      {
+        conceptId: 'compounding-mechanic',
+        conceptName: 'How compounding works',
+        easyStatement: 'Compounding means you can earn returns on past returns.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Growth builds on itself over time.',
+        mediumQuestion: 'What most improves compounding outcomes?',
+        mediumOptions: ['Frequent panic selling', 'Longer holding period and consistent contributions', 'Waiting for perfect market timing', 'Withdrawing gains every month'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Time and consistency are core compounding drivers.',
+        hardQuestion: 'Rule of 72: if return is 8%, doubling time is closest to:',
+        hardOptions: ['6 years', '9 years', '12 years', '18 years'],
+        hardCorrectAnswer: 1,
+        hardExplanation: '72/8 = 9 years (approximate).',
+      },
+      {
+        conceptId: 'time-vs-timing',
+        conceptName: 'Time in market versus timing',
+        easyStatement: 'Trying to perfectly time every market move is usually hard and unreliable.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Most investors do better with disciplined long-term plans.',
+        mediumQuestion: 'Best long-term habit for most beginners?',
+        mediumOptions: ['All-in only after crashes', 'Automated monthly investing', 'Daily leverage trades', 'Hold cash forever'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Automation reduces emotional decisions and supports consistency.',
+        hardQuestion: 'Missing a few best market days often leads to:',
+        hardOptions: ['Much lower long-term returns', 'Higher guaranteed returns', 'No impact on outcomes', 'Lower volatility and higher growth always'],
+        hardCorrectAnswer: 0,
+        hardExplanation: 'A handful of strong days can drive a large share of long-term gains.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-4', {
+    id: 'inv-lesson-4',
+    title: 'Stocks, ETFs, and Mutual Funds',
+    estimatedMinutes: 10,
+    difficulty: 'beginner',
+    content: `# Stocks, ETFs, and Mutual Funds
+
+A stock is ownership in one company. Funds hold many assets and offer diversification.
+
+## ETF Basics
+
+ETFs trade like stocks during market hours and often track an index with low fees.
+
+## Why Diversification Matters
+
+Owning many companies can reduce single-company risk.`,
+    concepts: [
+      {
+        conceptId: 'asset-vehicle-choice',
+        conceptName: 'Choosing investment vehicle',
+        easyStatement: 'An ETF can hold many stocks in one product.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. ETFs are often diversified baskets.',
+        mediumQuestion: 'Which is usually most diversified?',
+        mediumOptions: ['One tech stock', 'Broad global index ETF', 'One meme stock', 'One sector stock'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Broad index ETFs spread risk across many companies.',
+        hardQuestion: 'A beginner wants simplicity and diversification. Best first option?',
+        hardOptions: ['Concentrate in one high-volatility stock', 'Broad low-cost index ETF', 'Daily options trading', 'Leveraged inverse ETF'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'A broad, low-cost index ETF is usually a strong beginner base.',
+      },
+      {
+        conceptId: 'fees-and-costs',
+        conceptName: 'Fees and cost drag',
+        easyStatement: 'Higher annual fees can reduce long-term net returns.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Small fee differences compound over many years.',
+        mediumQuestion: 'Which expense ratio is generally better all else equal?',
+        mediumOptions: ['0.05%', '0.90%', '1.50%', '2.20%'],
+        mediumCorrectAnswer: 0,
+        mediumExplanation: 'Lower costs leave more return for the investor.',
+        hardQuestion: 'Why can a 1% fee difference matter so much?',
+        hardOptions: ['Fees are paid once only', 'Fees compound as a drag every year', 'Fees only affect taxes', 'Fees increase diversification automatically'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Annual fee drag compounds, reducing wealth over time.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-5', {
+    id: 'inv-lesson-5',
+    title: 'Bonds and Defensive Assets',
+    estimatedMinutes: 9,
+    difficulty: 'intermediate',
+    content: `# Bonds and Defensive Assets
+
+Bonds are loans to governments or companies. They generally provide lower expected return than stocks but can reduce volatility.
+
+## Role of Bonds
+
+Bonds can provide income and portfolio stability, especially for shorter horizons or lower risk tolerance.
+
+## Interest Rate Impact
+
+When rates rise, existing bond prices often fall. Duration helps estimate sensitivity.`,
+    concepts: [
+      {
+        conceptId: 'bond-role',
+        conceptName: 'Role of bonds in portfolio',
+        easyStatement: 'Bonds are commonly used to reduce overall portfolio volatility.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Bonds can smooth returns relative to equity-only portfolios.',
+        mediumQuestion: 'Who usually benefits most from adding bonds?',
+        mediumOptions: ['Investor needing money in 2 years', 'Investor with 40-year horizon and high tolerance only', 'Day trader with leverage', 'Speculator in penny stocks'],
+        mediumCorrectAnswer: 0,
+        mediumExplanation: 'Near-term goals often require lower volatility assets.',
+        hardQuestion: 'Which mix is typically less volatile?',
+        hardOptions: ['100% stocks', '80% stocks / 20% bonds', '100% crypto', 'Single-stock portfolio'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Adding bonds generally lowers volatility compared with 100% stocks.',
+      },
+      {
+        conceptId: 'interest-rate-risk',
+        conceptName: 'Interest rate risk in bonds',
+        easyStatement: 'When interest rates rise, existing bond prices often decline.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. New bonds issue at higher yields, making old lower-yield bonds less attractive.',
+        mediumQuestion: 'Which bonds are usually more rate-sensitive?',
+        mediumOptions: ['Short-duration bonds', 'Long-duration bonds', 'Cash savings', 'No-asset portfolio'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Longer duration typically means higher sensitivity to rate changes.',
+        hardQuestion: 'If rates fall, existing longer-duration bonds often:',
+        hardOptions: ['Lose more value than short bonds', 'Gain more value than short bonds', 'Stay exactly flat', 'Become cash'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Longer-duration bonds usually rise more when rates decline.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-6', {
+    id: 'inv-lesson-6',
+    title: 'Asset Allocation Fundamentals',
+    estimatedMinutes: 10,
+    difficulty: 'intermediate',
+    content: `# Asset Allocation Fundamentals
+
+Asset allocation is how you split money across equities, bonds, and cash-like assets.
+
+## Allocation Drives Outcomes
+
+Your allocation often matters more than picking one perfect stock.
+
+## Build for Goal and Timeline
+
+Longer timelines can usually hold more equities. Short timelines need more stability.`,
+    concepts: [
+      {
+        conceptId: 'allocation-principle',
+        conceptName: 'Allocation as core decision',
+        easyStatement: 'Asset allocation is a key driver of long-term portfolio behavior.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Allocation strongly influences risk and return profile.',
+        mediumQuestion: 'Which is an allocation decision?',
+        mediumOptions: ['Buy one random stock', 'Choose 70% equity and 30% bonds', 'Predict tomorrow market open', 'Refresh app theme'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Allocation sets strategic percentages by asset class.',
+        hardQuestion: 'A new investor with 30-year horizon and stable income likely starts with:',
+        hardOptions: ['Mostly cash forever', 'Higher equity allocation with diversification', 'All in one micro-cap stock', 'No plan and frequent switches'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Long horizon often supports higher equity exposure, diversified appropriately.',
+      },
+      {
+        conceptId: 'allocation-fit',
+        conceptName: 'Fit allocation to personal context',
+        easyStatement: 'Two investors can need different allocations even if returns are similar.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Horizon, stability, and behavior differ by person.',
+        mediumQuestion: 'What should you prioritize when choosing allocation?',
+        mediumOptions: ['Social media hype', 'Your goals, time horizon, and risk tolerance', 'Only past one-month returns', 'Friend recommendations only'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Personal context is the right anchor for allocation decisions.',
+        hardQuestion: 'Best adjustment when goals become shorter-term?',
+        hardOptions: ['Increase speculative assets', 'Gradually reduce risk and increase stability', 'Ignore timeline changes', 'Concentrate portfolio further'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Shorter timelines usually call for lower volatility allocation.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-7', {
+    id: 'inv-lesson-7',
+    title: 'Dollar-Cost Averaging and Contribution Strategy',
+    estimatedMinutes: 9,
+    difficulty: 'intermediate',
+    content: `# Dollar-Cost Averaging and Contribution Strategy
+
+Dollar-cost averaging (DCA) means investing a fixed amount at regular intervals.
+
+## Why DCA Helps Behavior
+
+DCA reduces emotional timing decisions and builds consistency.
+
+## Build an Automatic System
+
+Automate contributions after payday and increase as income grows.`,
+    concepts: [
+      {
+        conceptId: 'dca-basics',
+        conceptName: 'DCA mechanics',
+        easyStatement: 'Dollar-cost averaging means investing the same amount regularly.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. DCA buys more shares at lower prices and fewer at higher prices.',
+        mediumQuestion: 'Main benefit of DCA for most people:',
+        mediumOptions: ['Guaranteed higher return always', 'Perfect market timing', 'Reduces emotional timing decisions', 'Eliminates all risk'],
+        mediumCorrectAnswer: 2,
+        mediumExplanation: 'DCA primarily improves discipline and behavior.',
+        hardQuestion: 'If markets drop during DCA period, what usually happens?',
+        hardOptions: ['You buy fewer units each month', 'You buy more units with same amount', 'DCA stops working permanently', 'All prior gains are erased automatically'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Same contribution buys more units when prices are lower.',
+      },
+      {
+        conceptId: 'automation-habit',
+        conceptName: 'Automation and scaling contributions',
+        easyStatement: 'Automating investments can improve consistency.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Automation removes friction and forgetfulness.',
+        mediumQuestion: 'Best time to schedule automatic investing?',
+        mediumOptions: ['After payday', 'Randomly each quarter', 'Only after headlines', 'Never automate'],
+        mediumCorrectAnswer: 0,
+        mediumExplanation: 'After payday is practical and consistent for cash flow.',
+        hardQuestion: 'When income rises, what is a smart upgrade?',
+        hardOptions: ['Increase spending only', 'Increase automatic contribution rate gradually', 'Stop tracking portfolio', 'Concentrate in one risky asset'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Raising automated contributions strengthens long-term growth.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-8', {
+    id: 'inv-lesson-8',
+    title: 'Tax-Efficient Investing Accounts',
+    estimatedMinutes: 10,
+    difficulty: 'intermediate',
+    content: `# Tax-Efficient Investing Accounts
+
+Where you invest can matter as much as what you invest in.
+
+## Tax Wrappers
+
+Retirement and tax-advantaged accounts can reduce tax drag and accelerate growth.
+
+## Match and Allowances
+
+If your employer offers matching, that is often high-priority "free money".`,
+    concepts: [
+      {
+        conceptId: 'tax-wrapper-value',
+        conceptName: 'Value of tax-efficient accounts',
+        easyStatement: 'Tax-efficient accounts can improve net long-term returns.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Lower tax drag means more compounding stays invested.',
+        mediumQuestion: 'Why prioritize tax-advantaged accounts?',
+        mediumOptions: ['They remove all market risk', 'They can reduce taxes and improve compounding', 'They guarantee stock selection', 'They replace emergency fund'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Tax efficiency boosts net outcomes over time.',
+        hardQuestion: 'Best general order when employer match exists?',
+        hardOptions: ['Ignore match and buy random stocks', 'Capture match first, then continue broader plan', 'Only hold cash forever', 'Use high-interest debt first always'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Employer match is typically a high-priority benefit.',
+      },
+      {
+        conceptId: 'tax-location-basics',
+        conceptName: 'Tax location basics',
+        easyStatement: 'Placing assets in suitable account types can improve after-tax results.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Asset location can reduce tax drag.',
+        mediumQuestion: 'What is tax drag?',
+        mediumOptions: ['Broker app lag', 'Reduction in returns due to taxes', 'Market index growth', 'Lower volatility due to bonds'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Taxes reduce what remains invested and compounding.',
+        hardQuestion: 'Which mindset is best?',
+        hardOptions: ['Only pre-tax return matters', 'After-tax return and account choice both matter', 'Taxes are irrelevant for investors', 'Never use retirement accounts'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'After-tax outcomes and account strategy should be considered together.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-9', {
+    id: 'inv-lesson-9',
+    title: 'How to Evaluate Investments',
+    estimatedMinutes: 10,
+    difficulty: 'intermediate',
+    content: `# How to Evaluate Investments
+
+Evaluation starts with purpose, cost, risk, and fit with your plan.
+
+## Start with Basics
+
+Understand what you own, how it makes return, and the key risks.
+
+## Avoid Hype-Driven Decisions
+
+A good investment is not just "popular"; it should match your strategy.`,
+    concepts: [
+      {
+        conceptId: 'evaluation-checklist',
+        conceptName: 'Investment evaluation checklist',
+        easyStatement: 'Before investing, you should understand fees, risks, and what the asset does.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. A simple checklist prevents blind decisions.',
+        mediumQuestion: 'Which is a strong first question?',
+        mediumOptions: ['Is it trending online?', 'What role does this asset play in my plan?', 'Did a friend buy it?', 'Can it double next week?'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Role in plan is more important than hype.',
+        hardQuestion: 'If two funds track similar indexes, what can be a deciding factor?',
+        hardOptions: ['Ticker popularity only', 'Lower cost and tracking quality', 'More social media mentions', 'Higher turnover without reason'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Lower costs and better tracking often improve long-term net returns.',
+      },
+      {
+        conceptId: 'single-stock-caution',
+        conceptName: 'Single-stock concentration risk',
+        easyStatement: 'Putting all your money in one stock increases concentration risk.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Single-company shocks can heavily damage your portfolio.',
+        mediumQuestion: 'Safer default for most beginners?',
+        mediumOptions: ['One speculative stock', 'Diversified broad market fund', 'Leverage on one company', 'No diversification'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Diversification lowers company-specific risk.',
+        hardQuestion: 'If you want some stock-picking, what is prudent?',
+        hardOptions: ['Use 100% of portfolio', 'Keep a small satellite portion while core stays diversified', 'Borrow money to buy one stock', 'Ignore position sizing'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'A core-satellite approach controls concentration risk.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-10', {
+    id: 'inv-lesson-10',
+    title: 'Behavioral Mistakes and Market Psychology',
+    estimatedMinutes: 9,
+    difficulty: 'advanced',
+    content: `# Behavioral Mistakes and Market Psychology
+
+Many investing mistakes are emotional, not technical.
+
+## Common Traps
+
+Fear, greed, overconfidence, and recency bias can lead to bad decisions.
+
+## Process Over Prediction
+
+A repeatable system beats emotional reaction to headlines.`,
+    concepts: [
+      {
+        conceptId: 'behavioral-bias',
+        conceptName: 'Behavioral bias awareness',
+        easyStatement: 'Emotions can hurt investment results if decisions are impulsive.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Behavioral discipline is a major edge.',
+        mediumQuestion: 'What is recency bias?',
+        mediumOptions: ['Ignoring all new data', 'Assuming recent performance will continue forever', 'Investing monthly automatically', 'Diversifying portfolio'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Recency bias overweights recent events.',
+        hardQuestion: 'Best defense against panic selling?',
+        hardOptions: ['Check portfolio every hour', 'Predefined plan with target allocation and rebalancing rules', 'Follow social media sentiment', 'Hold only one volatile asset'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'A written process reduces emotional overrides.',
+      },
+      {
+        conceptId: 'discipline-system',
+        conceptName: 'Discipline and rules',
+        easyStatement: 'A simple written investing plan can improve consistency.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Rules reduce impulsive actions.',
+        mediumQuestion: 'Which rule is most useful?',
+        mediumOptions: ['Buy only after viral posts', 'Review monthly and rebalance by threshold', 'Trade whenever anxious', 'Change strategy weekly'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Scheduled reviews and thresholds support disciplined behavior.',
+        hardQuestion: 'During a sharp market drop, a disciplined investor usually:',
+        hardOptions: ['Sells entire portfolio instantly', 'Follows plan and continues contributions if appropriate', 'Switches strategy daily', 'Chases inverse leveraged products'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Sticking to plan is generally better than emotional reaction.',
+      },
+    ],
+  }),
+  buildInvestingLesson('inv-11', {
+    id: 'inv-lesson-11',
+    title: 'Building and Rebalancing Your Portfolio',
+    estimatedMinutes: 11,
+    difficulty: 'advanced',
+    content: `# Building and Rebalancing Your Portfolio
+
+Portfolio construction combines allocation, diversification, contribution rhythm, and review cadence.
+
+## Rebalancing
+
+Rebalancing restores target weights when markets drift your allocation.
+
+## Complete Beginner Framework
+
+Choose target allocation, automate contributions, review periodically, and rebalance with rules.`,
+    concepts: [
+      {
+        conceptId: 'rebalancing-purpose',
+        conceptName: 'Purpose of rebalancing',
+        easyStatement: 'Rebalancing helps keep portfolio risk aligned with your target allocation.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Rebalancing restores intended risk profile.',
+        mediumQuestion: 'When should you rebalance?',
+        mediumOptions: ['Every day without reason', 'Based on schedule or drift threshold', 'Only after big headlines', 'Never rebalance'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Scheduled or threshold-based rebalancing is a practical method.',
+        hardQuestion: 'If equities run up and exceed your target weight, rebalancing usually means:',
+        hardOptions: ['Buying even more equities only', 'Trimming equities or directing new money to underweight assets', 'Deleting all bonds', 'Ignoring drift permanently'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Rebalancing reduces overweight exposure and restores target mix.',
+      },
+      {
+        conceptId: 'portfolio-workflow',
+        conceptName: 'Beginner portfolio workflow',
+        easyStatement: 'A repeatable workflow is better than random investment actions.',
+        easyAnswer: true,
+        easyExplanation: 'Correct. Process improves long-term consistency.',
+        mediumQuestion: 'Which sequence is strongest?',
+        mediumOptions: ['Pick hot stock, then plan later', 'Set goals, choose allocation, automate contributions, review and rebalance', 'Trade news daily, then diversify someday', 'Only check gains'],
+        mediumCorrectAnswer: 1,
+        mediumExplanation: 'Goal-first, allocation-led process is robust for beginners.',
+        hardQuestion: 'What best describes a sustainable investing system?',
+        hardOptions: ['High complexity and constant prediction', 'Simple rules you can follow for years', 'No emergency fund and maximum risk', 'Frequent strategy changes'],
+        hardCorrectAnswer: 1,
+        hardExplanation: 'Long-term success depends on consistent execution, not constant prediction.',
+      },
+    ],
+  }),
+];
+
+// =============================================================================
 // COURSE EXPORTS
 // =============================================================================
 
 // Process lessons to add module structure
-function processLessonsWithModules(lessons: Lesson[]): Lesson[] {
-  return lessons.map(lesson => ({
-    ...lesson,
-    modules: generateModulesForLesson(lesson),
-  }));
+function processLessonsWithModules(lessons: RawLesson[]): Lesson[] {
+  return lessons.map(lesson => {
+    const normalizedQuestions = normalizeQuestionsForAdaptive(
+      lesson.id,
+      lesson.domain,
+      lesson.questions
+    );
+
+    const normalizedLesson: RawLesson = {
+      ...lesson,
+      questions: normalizedQuestions,
+    };
+
+    return {
+      ...normalizedLesson,
+      modules: generateModulesForLesson(normalizedLesson),
+    };
+  });
 }
 
 // Course 1: Money Foundations
@@ -2374,10 +3413,24 @@ export const creditDebtCourse: Course = {
   estimatedHours: Math.round(creditDebtLessons.reduce((sum, l) => sum + l.estimatedMinutes, 0) / 60 * 10) / 10,
 };
 
+// Course 3: Investing Essentials
+export const investingCourse: Course = {
+  id: 'course-investing-essentials',
+  title: 'Investing Essentials',
+  description: 'Learn investing from zero to confident portfolio building: risk, ETFs, allocation, behavior, and rebalancing.',
+  icon: 'trending-up',
+  color: '#F97316',  // Orange
+  domain: 'investing',
+  lessons: processLessonsWithModules(investingLessons),
+  totalXP: investingLessons.reduce((sum, l) => sum + l.xpReward, 0),
+  estimatedHours: Math.round(investingLessons.reduce((sum, l) => sum + l.estimatedMinutes, 0) / 60 * 10) / 10,
+};
+
 // All courses array
 export const courses: Course[] = [
   moneyFoundationsCourse,
   creditDebtCourse,
+  investingCourse,
 ];
 
 // Export helper to get a course by ID

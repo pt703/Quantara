@@ -202,8 +202,10 @@ export interface ConceptTag {
 
 // A content block within a reading module
 export interface ContentBlock {
-  type: 'text' | 'highlight' | 'example' | 'tip' | 'warning' | 'interactive';
+  type: 'text' | 'highlight' | 'example' | 'tip' | 'warning' | 'interactive' | 'image';
   content: string;               // Markdown or plain text
+  imageKey?: 'welcome-hero' | 'app-logo' | 'quantara-logo';
+  imageAlt?: string;
   animationPreset?: AnimationPreset;
   delayMs?: number;              // Delay before showing (for sequencing)
 }

@@ -73,7 +73,7 @@ interface SkillResult {
 // These questions test baseline knowledge across all skill domains.
 // Each question is tagged with a skillDomain for tracking.
 
-const ASSESSMENT_QUESTIONS: AssessmentQuestion[] = [
+const GENERAL_ASSESSMENT_QUESTIONS: AssessmentQuestion[] = [
   // BUDGETING QUESTIONS
   {
     id: 'assess-budget-1',
@@ -296,6 +296,153 @@ const ASSESSMENT_QUESTIONS: AssessmentQuestion[] = [
   } as AssessmentQuestion & ScenarioQuestion,
 ];
 
+const INVESTING_ASSESSMENT_QUESTIONS: AssessmentQuestion[] = [
+  {
+    id: 'assess-inv-1',
+    type: 'mcq',
+    skillDomain: 'investing',
+    question: 'What is the primary long-term reason people invest?',
+    options: [
+      'To guarantee no losses',
+      'To try to grow purchasing power above inflation',
+      'To avoid having any budget',
+      'To make money every single day',
+    ],
+    correctAnswer: 1,
+    explanation: 'Correct. Investing aims to grow wealth over time and preserve purchasing power against inflation.',
+    xpReward: 15,
+    difficulty: 'beginner',
+  } as AssessmentQuestion & MCQQuestion,
+  {
+    id: 'assess-inv-2',
+    type: 'true_false',
+    skillDomain: 'investing',
+    question: 'A broad index fund usually gives more diversification than buying one stock.',
+    correctAnswer: true,
+    explanation: 'Correct. Index funds hold many companies, reducing single-company risk.',
+    xpReward: 10,
+    difficulty: 'beginner',
+  } as AssessmentQuestion & TrueFalseQuestion,
+  {
+    id: 'assess-inv-3',
+    type: 'mcq',
+    skillDomain: 'investing',
+    question: 'If inflation is 5% and your cash earns 1%, your approximate real return is:',
+    options: ['+4%', '0%', '-4%', '+6%'],
+    correctAnswer: 2,
+    explanation: 'Approximate real return is nominal return minus inflation: 1% - 5% = -4%.',
+    xpReward: 15,
+    difficulty: 'beginner',
+  } as AssessmentQuestion & MCQQuestion,
+  {
+    id: 'assess-inv-4',
+    type: 'mcq',
+    skillDomain: 'investing',
+    question: 'Which is generally best for an emergency fund?',
+    options: [
+      'High-yield savings account',
+      'Single growth stock',
+      'Cryptocurrency',
+      'Leveraged ETF',
+    ],
+    correctAnswer: 0,
+    explanation: 'Emergency funds should be safe and liquid, typically in high-yield savings.',
+    xpReward: 15,
+    difficulty: 'beginner',
+  } as AssessmentQuestion & MCQQuestion,
+  {
+    id: 'assess-inv-5',
+    type: 'scenario',
+    skillDomain: 'investing',
+    question: 'Choose the best beginner investing approach:',
+    scenario: 'You are new to investing, have stable income, emergency fund in place, and want long-term growth.',
+    options: [
+      { text: 'Put all money in one popular stock', outcome: 'High concentration risk for a beginner.', impactScore: 20 },
+      { text: 'Use a diversified low-cost index fund with monthly auto-investing', outcome: 'Strong beginner framework with discipline and diversification.', impactScore: 100 },
+      { text: 'Trade options daily', outcome: 'Too advanced and high-risk for most beginners.', impactScore: -40 },
+      { text: 'Wait forever for perfect entry', outcome: 'Delays compounding and creates timing paralysis.', impactScore: 10 },
+    ],
+    bestOptionIndex: 1,
+    explanation: 'A diversified, low-cost, automated approach is usually a strong beginner baseline.',
+    xpReward: 25,
+    difficulty: 'intermediate',
+  } as AssessmentQuestion & ScenarioQuestion,
+  {
+    id: 'assess-inv-6',
+    type: 'mcq',
+    skillDomain: 'investing',
+    question: 'What does asset allocation mean?',
+    options: [
+      'Choosing only one stock',
+      'Splitting money across asset classes like stocks and bonds',
+      'Timing daily market movements',
+      'Only maximizing dividend yield',
+    ],
+    correctAnswer: 1,
+    explanation: 'Asset allocation is the strategic split across asset classes and is a key risk/return driver.',
+    xpReward: 15,
+    difficulty: 'intermediate',
+  } as AssessmentQuestion & MCQQuestion,
+  {
+    id: 'assess-inv-7',
+    type: 'true_false',
+    skillDomain: 'investing',
+    question: 'Dollar-cost averaging means investing a fixed amount on a regular schedule.',
+    correctAnswer: true,
+    explanation: 'Correct. DCA supports consistency and reduces emotional timing decisions.',
+    xpReward: 10,
+    difficulty: 'beginner',
+  } as AssessmentQuestion & TrueFalseQuestion,
+  {
+    id: 'assess-inv-8',
+    type: 'mcq',
+    skillDomain: 'investing',
+    question: 'What is a key risk when a few mega-cap stocks dominate an index?',
+    options: [
+      'No risk increase at all',
+      'Portfolio becomes more sensitive to those few names',
+      'Index becomes a bond fund',
+      'It automatically guarantees higher returns',
+    ],
+    correctAnswer: 1,
+    explanation: 'Higher concentration means performance depends more on fewer companies.',
+    xpReward: 15,
+    difficulty: 'intermediate',
+  } as AssessmentQuestion & MCQQuestion,
+  {
+    id: 'assess-inv-9',
+    type: 'mcq',
+    skillDomain: 'investing',
+    question: 'Which is typically active income?',
+    options: [
+      'Salary from your job',
+      'Dividend payout',
+      'Bond coupon from holdings',
+      'Rental income from paid-off property',
+    ],
+    correctAnswer: 0,
+    explanation: 'Salary is usually active income because it requires your ongoing time/labor.',
+    xpReward: 15,
+    difficulty: 'beginner',
+  } as AssessmentQuestion & MCQQuestion,
+  {
+    id: 'assess-inv-10',
+    type: 'mcq',
+    skillDomain: 'investing',
+    question: 'A house with a mortgage is best viewed as:',
+    options: [
+      'Only a liability',
+      'Only an asset',
+      'A property asset with a loan liability',
+      'Neither',
+    ],
+    correctAnswer: 2,
+    explanation: 'The property is an asset while the mortgage is a liability.',
+    xpReward: 15,
+    difficulty: 'beginner',
+  } as AssessmentQuestion & MCQQuestion,
+];
+
 // =============================================================================
 // MAIN COMPONENT
 // =============================================================================
@@ -324,8 +471,14 @@ export default function PreAssessmentScreen({ navigation, route }: PreAssessment
   // After completing assessment, this lets users pick their learning path
   const [selectedDomain, setSelectedDomain] = useState<SkillDomain | null>(null);
 
-  const currentQuestion = ASSESSMENT_QUESTIONS[currentQuestionIndex];
-  const totalQuestions = ASSESSMENT_QUESTIONS.length;
+  const assessmentQuestions = useMemo(() => {
+    return courseId === 'course-investing-essentials'
+      ? INVESTING_ASSESSMENT_QUESTIONS
+      : GENERAL_ASSESSMENT_QUESTIONS;
+  }, [courseId]);
+
+  const currentQuestion = assessmentQuestions[currentQuestionIndex];
+  const totalQuestions = assessmentQuestions.length;
   const progress = ((currentQuestionIndex) / totalQuestions) * 100;
 
   // ==========================================================================
@@ -336,14 +489,14 @@ export default function PreAssessmentScreen({ navigation, route }: PreAssessment
     const domains: SkillDomain[] = ['budgeting', 'saving', 'debt', 'credit', 'investing'];
     
     return domains.map(domain => {
-      const domainQuestions = ASSESSMENT_QUESTIONS.filter(q => q.skillDomain === domain);
+      const domainQuestions = assessmentQuestions.filter(q => q.skillDomain === domain);
       const correct = domainQuestions.filter(q => answers[q.id] === true).length;
       const total = domainQuestions.length;
       const percentage = total > 0 ? (correct / total) * 100 : 0;
       
       return { domain, correct, total, percentage };
     });
-  }, [answers]);
+  }, [answers, assessmentQuestions]);
 
   // ==========================================================================
   // HANDLERS
@@ -354,6 +507,7 @@ export default function PreAssessmentScreen({ navigation, route }: PreAssessment
   }, []);
 
   const handleAnswer = useCallback((result: QuestionResult) => {
+    if (!currentQuestion) return;
     const questionId = currentQuestion.id;
     
     setAnswers(prev => ({
@@ -395,20 +549,13 @@ export default function PreAssessmentScreen({ navigation, route }: PreAssessment
     }
   }, [skillResults, storeBaselineAssessment, markCourseAssessed, courseId, course, gainXP, xpEarned, navigation]);
 
-  // Skip assessment - go directly to first lesson
+  // Skip assessment - go to course overview (CourseDetail)
   const handleSkip = useCallback(() => {
     markCourseAssessed(courseId);
-    
-    // Navigate directly to first lesson
-    if (course && course.lessons.length > 0) {
-      navigation.replace('LessonPlayer', {
-        courseId: courseId,
-        lessonId: course.lessons[0].id,
-      });
-    } else {
-      navigation.replace('Learn');
-    }
-  }, [markCourseAssessed, courseId, course, navigation]);
+    navigation.replace('CourseDetail', {
+      courseId,
+    });
+  }, [markCourseAssessed, courseId, navigation]);
 
   // ==========================================================================
   // RENDER INTRO SCREEN

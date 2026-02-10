@@ -12,7 +12,7 @@
 //
 // =============================================================================
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, Pressable, FlatList } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -219,9 +219,10 @@ function LessonCard({
 // =============================================================================
 
 export default function CourseDetailScreen({ navigation, route }: CourseDetailScreenProps) {
-  const { courseId } = route.params;
+  const { courseId, resumeLessonId, resumeModuleId } = route.params;
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const hasAutoResumedRef = useRef(false);
   
   const course = useMemo(() => getCourseById(courseId), [courseId]);
   const { moduleProgress, getLessonProgress, isLessonComplete, reload } = useModuleProgress();
@@ -244,6 +245,35 @@ export default function CourseDetailScreen({ navigation, route }: CourseDetailSc
     
     return course.lessons.length > 0 ? completedLessons / course.lessons.length : 0;
   }, [course, moduleProgress, isLessonComplete]);
+
+  const navigateToModule = useCallback((lesson: Lesson, moduleIndex: number) => {
+    if (!lesson.modules || moduleIndex < 0 || moduleIndex >= lesson.modules.length) return;
+    const modules = lesson.modules;
+    const totalModules = modules.length;
+    const targetModule = modules[moduleIndex];
+
+    if (targetModule.type === 'reading') {
+      navigation.navigate('ReadingModule', {
+        moduleId: targetModule.id,
+        lessonId: lesson.id,
+        courseId: courseId,
+        moduleIndex,
+        totalModules,
+        module: targetModule as any,
+        allModules: modules as any,
+      });
+    } else if (targetModule.type === 'quiz') {
+      navigation.navigate('QuizModule', {
+        moduleId: targetModule.id,
+        lessonId: lesson.id,
+        courseId: courseId,
+        moduleIndex,
+        totalModules,
+        module: targetModule as any,
+        allModules: modules as any,
+      });
+    }
+  }, [navigation, courseId]);
   
   // Navigate to the first incomplete module in the lesson
   // If all modules complete, go to the first module for review
@@ -264,32 +294,18 @@ export default function CourseDetailScreen({ navigation, route }: CourseDetailSc
       targetModuleIndex = i; // All complete, default to last
     }
     
-    const targetModule = modules[targetModuleIndex];
-    
-    // Navigate to appropriate screen based on module type
-    // Pass allModules so user can navigate to next module with Next button
-    if (targetModule.type === 'reading') {
-      navigation.navigate('ReadingModule', {
-        moduleId: targetModule.id,
-        lessonId: lesson.id,
-        courseId: courseId,
-        moduleIndex: targetModuleIndex,
-        totalModules: totalModules,
-        module: targetModule as any,
-        allModules: modules as any,
-      });
-    } else if (targetModule.type === 'quiz') {
-      navigation.navigate('QuizModule', {
-        moduleId: targetModule.id,
-        lessonId: lesson.id,
-        courseId: courseId,
-        moduleIndex: targetModuleIndex,
-        totalModules: totalModules,
-        module: targetModule as any,
-        allModules: modules as any,
-      });
-    }
-  }, [navigation, courseId, moduleProgress]);
+    navigateToModule(lesson, targetModuleIndex);
+  }, [moduleProgress, navigateToModule]);
+
+  useEffect(() => {
+    if (!course || hasAutoResumedRef.current || !resumeLessonId || !resumeModuleId) return;
+    const lesson = course.lessons.find(l => l.id === resumeLessonId);
+    if (!lesson?.modules || lesson.modules.length === 0) return;
+    const moduleIndex = lesson.modules.findIndex(m => m.id === resumeModuleId);
+    if (moduleIndex < 0) return;
+    hasAutoResumedRef.current = true;
+    navigateToModule(lesson, moduleIndex);
+  }, [course, navigateToModule, resumeLessonId, resumeModuleId]);
   
   const renderLesson = useCallback(({ item, index }: { item: Lesson; index: number }) => {
     if (!course) return null;

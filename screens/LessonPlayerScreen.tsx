@@ -14,7 +14,7 @@
 //
 // =============================================================================
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -50,8 +50,9 @@ import { getLessonById } from '../mock/courses';
 import { LearnStackParamList } from '../navigation/LearnStackNavigator';
 import { Confetti } from '@/components/Confetti';
 import * as Haptics from '@/utils/haptics';
-import { generateSimilarQuestion, canGenerateAIQuestions } from '@/services/aiQuestionService';
+import { generateConceptQuestion, canGenerateAIQuestions } from '@/services/aiQuestionService';
 import { recordQuizResult as recordQuizResultToBackend, syncLessonProgress } from '@/services/supabaseDataService';
+import { useLearningMode } from '@/hooks/useLearningMode';
 
 // =============================================================================
 // TYPES
@@ -72,6 +73,7 @@ type QuestionState = 'unanswered' | 'correct' | 'incorrect';
 export default function LessonPlayerScreen({ navigation, route }: LessonPlayerScreenProps) {
   const { lessonId, courseId } = route.params;
   const { theme } = useTheme();
+  const { isAdaptive } = useLearningMode();
   const insets = useSafeAreaInsets();
   
   // Get lesson data
@@ -101,6 +103,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
 
   // Current question index in the dynamic queue
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const currentQuestionIndexRef = useRef(0);
   
   // Dynamic question queue - starts with original questions, grows when wrong answers occur
   // Duolingo-style: wrong answers add the question back to the queue for repetition
@@ -199,6 +202,10 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     progressWidth.value = withSpring(progress);
   }, [progress, progressWidth]);
 
+  useEffect(() => {
+    currentQuestionIndexRef.current = currentQuestionIndex;
+  }, [currentQuestionIndex]);
+
   // ==========================================================================
   // HANDLERS
   // ==========================================================================
@@ -264,29 +271,82 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
         [currentQuestion.id]: attemptCount,
       }));
       
-      // DUOLINGO-STYLE REPETITION: Add a question back to the queue
-      // If AI is available, generate a similar (but different) question
-      const newQueueIndex = questionQueue.length;
-      
-      // Immediately add original question as placeholder (for responsiveness)
-      setQuestionQueue(prev => [...prev, currentQuestion]);
-      setQuestionStates(prev => [...prev, 'unanswered']);
-      
-      // Try to generate an AI-powered similar question in the background
-      if (canGenerateAIQuestions()) {
-        generateSimilarQuestion(currentQuestion, attemptCount)
+      // DUOLINGO-STYLE REPETITION:
+      // Always queue: easy -> medium -> original retry.
+      const queueStartIndex = questionQueue.length;
+      const conceptId = (currentQuestion as any).conceptId || currentQuestion.id;
+
+      const easyFallback = originalQuestions.find(
+        q =>
+          q.id !== currentQuestion.id &&
+          ((q as any).conceptId && (q as any).conceptId === (currentQuestion as any).conceptId && (q as any).difficultyTier === 1) ||
+          (q.id !== currentQuestion.id && q.difficulty === 'beginner')
+      ) || currentQuestion;
+
+      const mediumFallback = originalQuestions.find(
+        q =>
+          q.id !== currentQuestion.id &&
+          q.id !== easyFallback.id &&
+          (
+            ((q as any).conceptId && (q as any).conceptId === (currentQuestion as any).conceptId && (q as any).difficultyTier === 2) ||
+            q.difficulty === 'intermediate'
+          )
+      ) || currentQuestion;
+
+      const queuedQuestions: Question[] = [easyFallback, mediumFallback, currentQuestion];
+
+      setQuestionQueue(prev => [...prev, ...queuedQuestions]);
+      setQuestionStates(prev => [...prev, ...new Array(queuedQuestions.length).fill('unanswered')]);
+
+      // AI enhancement runs in background; premade queue is immediate fallback.
+      if (isAdaptive && canGenerateAIQuestions()) {
+        const domain = (lesson?.domain || course?.domain || 'budgeting') as any;
+        const conceptName = (currentQuestion as any).conceptId
+          ? String((currentQuestion as any).conceptId).replace(/[-_]/g, ' ')
+          : currentQuestion.question.substring(0, 50);
+        const easyIndex = queueStartIndex;
+        const mediumIndex = queueStartIndex + 1;
+
+        generateConceptQuestion(
+          currentQuestion,
+          conceptId,
+          conceptName,
+          domain,
+          'beginner'
+        )
           .then(aiQuestion => {
             if (aiQuestion) {
-              console.log('[AI] Generated similar question:', aiQuestion.id);
-              // Store the AI question as a replacement for this queue position
+              if (currentQuestionIndexRef.current >= easyIndex) return;
+              console.log('[AI] Generated easy remediation question:', aiQuestion.id);
               setAiReplacementQuestions(prev => ({
                 ...prev,
-                [newQueueIndex]: aiQuestion,
+                [easyIndex]: aiQuestion,
               }));
             }
           })
           .catch(error => {
-            console.error('[AI] Failed to generate similar question:', error);
+            console.error('[AI] Failed easy remediation generation:', error);
+          });
+
+        generateConceptQuestion(
+          currentQuestion,
+          conceptId,
+          conceptName,
+          domain,
+          'intermediate'
+        )
+          .then(aiQuestion => {
+            if (aiQuestion) {
+              if (currentQuestionIndexRef.current >= mediumIndex) return;
+              console.log('[AI] Generated medium remediation question:', aiQuestion.id);
+              setAiReplacementQuestions(prev => ({
+                ...prev,
+                [mediumIndex]: aiQuestion,
+              }));
+            }
+          })
+          .catch(error => {
+            console.error('[AI] Failed medium remediation generation:', error);
           });
       }
     }
@@ -315,7 +375,7 @@ export default function LessonPlayerScreen({ navigation, route }: LessonPlayerSc
     setTimeout(() => {
       setShowExplanation(true);
     }, 800);
-  }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale, isRepeatQuestion, attemptedQuestions, questionQueue, questionAttemptCounts, lesson, course, isAlreadyCompleted]);
+  }, [currentQuestionIndex, questionStates, currentQuestion, loseHeart, xpScale, isRepeatQuestion, attemptedQuestions, questionQueue, questionAttemptCounts, lesson, course, isAlreadyCompleted, originalQuestions, isAdaptive]);
 
   /**
    * Called when all questions are answered and mastered.

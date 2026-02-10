@@ -67,6 +67,7 @@ import * as Haptics from '@/utils/haptics';
 import { recordQuizResult as recordQuizResultToBackend, syncLessonProgress } from '@/services/supabaseDataService';
 import { generateConceptQuestion, canGenerateAIQuestions } from '@/services/aiQuestionService';
 import { useUserDataContext } from '@/context/UserDataContext';
+import { useLearningMode } from '@/hooks/useLearningMode';
 
 // =============================================================================
 // TYPES
@@ -98,9 +99,17 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   
   const { recordQuizAttempt, getModuleProgress } = useModuleProgress();
   const { hearts, loseHeart, gainXP, addHearts, streak, recordLessonComplete } = useGamification();
+  const { isAdaptive } = useLearningMode();
   
   const existingProgress = getModuleProgress(moduleId);
-  const isAlreadyCompleted = existingProgress?.status === 'completed' && existingProgress?.masteryAchieved;
+  // Freeze session mode on start so first-attempt runs don't flip into
+  // "review mode" immediately after we save completion at the end.
+  const [sessionStartAttempts, setSessionStartAttempts] = useState<number>(existingProgress?.attempts ?? 0);
+  const [sessionStartWasCompleted, setSessionStartWasCompleted] = useState<boolean>(
+    Boolean(existingProgress?.status === 'completed' && existingProgress?.masteryAchieved)
+  );
+  const isAlreadyCompleted = sessionStartWasCompleted;
+  const isFirstQuizAttempt = sessionStartAttempts === 0;
   const { registerWrongAnswer, markRemediated } = useWrongAnswerRegistry();
   const { recordQuizResult } = useSkillAccuracy();
   const { recordLessonAttempt } = useAdaptiveLearning(streak);
@@ -127,6 +136,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   
   // Current position in queue
   const [currentIndex, setCurrentIndex] = useState(0);
+  const currentIndexRef = useRef(0);
   
   // Track concept mastery - user must correctly answer HARD for each concept
   // Key: conceptId, Value: whether the HARD question was answered correctly
@@ -173,7 +183,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   useEffect(() => {
     if (module && questionQueue.length === 0) {
       // Check if module uses the new adaptive structure
-      if (module.conceptVariants && module.conceptVariants.length > 0) {
+      if (isAdaptive && module.conceptVariants && module.conceptVariants.length > 0) {
         // =================================================================
         // NEW ADAPTIVE MODE: Hard-first testing
         // =================================================================
@@ -214,34 +224,9 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         setConceptResults(initialResults);
         setQuestionQueue(initialQueue);
 
-        // Try to generate AI replacements for each hard question in background
-        if (canGenerateAIQuestions()) {
-          const userCtx = financial ? {
-            monthlyIncome: financial.monthlyIncome,
-            monthlyExpenses: financial.monthlyExpenses,
-            savingsGoal: financial.savingsGoal,
-            currentSavings: financial.currentSavings,
-            monthlyDebt: financial.totalDebt,
-          } : undefined;
-
-          initialQueue.forEach((item, index) => {
-            const cv = module.conceptVariants!.find(c => c.conceptId === item.conceptId);
-            if (cv) {
-              generateConceptQuestion(
-                item.question,
-                cv.conceptId,
-                cv.conceptName,
-                cv.domain as any,
-                'advanced',
-                userCtx
-              ).then(aiQ => {
-                if (aiQ) {
-                  setAiReplacements(prev => ({ ...prev, [index]: aiQ }));
-                }
-              }).catch(() => {});
-            }
-          });
-        }
+        // Intentionally do NOT pre-generate AI questions here.
+        // AI generation is only triggered after wrong answers (remediation),
+        // so quota is preserved for moments where adaptation is actually needed.
         
       } else {
         // =================================================================
@@ -253,14 +238,17 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         const initialQueue = module.questions.map(q => ({
           question: q,
           isPenalty: false,
-          conceptId: q.id,  // Use question ID as concept ID for legacy tracking
-          difficultyTier: 3 as const, // Treat all legacy questions as "hard" so they mark mastery
-          isInitialHardTest: true,    // So correct answers mark mastery
+          conceptId: (q as any).conceptId || q.id,  // Prefer explicit concept grouping when available
+          // In adaptive mode, treat initial pass as hard-first test.
+          difficultyTier: (isAdaptive ? 3 : ((q as any).difficultyTier || 3)) as 1 | 2 | 3,
+          // In adaptive mode, the first pass should be treated as initial hard test
+          // so wrong answers trigger remediation flow for legacy modules too.
+          isInitialHardTest: isAdaptive,
         }));
         setQuestionQueue(initialQueue);
       }
     }
-  }, [module, questionQueue.length]);
+  }, [module, questionQueue.length, isAdaptive]);
 
   // Current question - use AI replacement if available, otherwise pre-made
   const currentQueueItem = questionQueue[currentIndex];
@@ -277,7 +265,17 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   // Reset question timer when moving to new question
   useEffect(() => {
     questionStartTime.current = Date.now();
+    currentIndexRef.current = currentIndex;
   }, [currentIndex]);
+
+  // Keep session-start flags in sync only before the first answer is submitted.
+  useEffect(() => {
+    if (totalAttempts > 0) return;
+    setSessionStartAttempts(existingProgress?.attempts ?? 0);
+    setSessionStartWasCompleted(
+      Boolean(existingProgress?.status === 'completed' && existingProgress?.masteryAchieved)
+    );
+  }, [existingProgress, totalAttempts]);
 
   // Animate progress bar
   useEffect(() => {
@@ -390,14 +388,20 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       // =================================================================
       // WRONG ANSWER
       // =================================================================
+      console.log('[AI] Wrong answer detected', {
+        questionId: currentQuestion.id,
+        conceptId,
+        isAdaptive,
+        canGenerate: canGenerateAIQuestions(),
+      });
       Haptics.wrongAnswer();
-      if (!isAlreadyCompleted) {
+      if (isFirstQuizAttempt) {
         loseHeart();
         setHeartsLost(prev => prev + 1);
       }
       
       // Check if this is an initial HARD test failure (triggers penalty cascade)
-      if (currentQueueItem.isInitialHardTest && conceptId && module?.conceptVariants) {
+      if (isAdaptive && currentQueueItem.isInitialHardTest && conceptId && module?.conceptVariants) {
         // Find the concept variant to get easy/medium questions
         const conceptVariant = module.conceptVariants.find(c => c.conceptId === conceptId);
         
@@ -463,8 +467,10 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
                 monthlyDebt: financial.totalDebt,
               } : undefined;
 
-              const difficulties: Array<'beginner' | 'intermediate' | 'advanced'> = ['beginner', 'intermediate', 'advanced'];
-              penaltyQuestions.forEach((pq, i) => {
+              const difficulties: Array<'beginner' | 'intermediate'> = ['beginner', 'intermediate'];
+              // Only replace EASY and MEDIUM remediation via AI.
+              // HARD slot must remain the original retry question.
+              penaltyQuestions.slice(0, 2).forEach((pq, i) => {
                 const queueIdx = prev.length + i;
                 generateConceptQuestion(
                   pq.question,
@@ -475,10 +481,16 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
                   userCtx
                 ).then(aiQ => {
                   if (aiQ) {
+                    if (currentIndexRef.current >= queueIdx) return;
+                    console.log('[AI] Generated penalty replacement:', aiQ.id, 'for queue index', queueIdx);
                     setAiReplacements(prevR => ({ ...prevR, [queueIdx]: aiQ }));
                   }
-                }).catch(() => {});
+                }).catch((error) => {
+                  console.error('[AI] Failed penalty replacement generation:', error);
+                });
               });
+            } else {
+              console.log('[AI] Skipping penalty replacement generation (Gemini unavailable or in cooldown)');
             }
             
             return newQueue;
@@ -506,7 +518,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
             conceptVariant.easyQuestionId
           );
         }
-      } else if (currentQueueItem.isPenalty && conceptId && currentQueueItem.difficultyTier === 3) {
+      } else if (isAdaptive && currentQueueItem.isPenalty && conceptId && currentQueueItem.difficultyTier === 3) {
         // Failed the HARD question in penalty cascade - add it back to retry
         // User must eventually get the hard question right to master the concept
         setQuestionQueue(prev => [...prev, {
@@ -517,21 +529,75 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
           isInitialHardTest: false,
           penaltyPosition: 2,
         }]);
-      } else if (currentQueueItem.isInitialHardTest && conceptId && !module?.conceptVariants) {
+      } else if (isAdaptive && currentQueueItem.isInitialHardTest && conceptId && module && !module.conceptVariants) {
         // =============================================================
-        // LEGACY MODE: Re-queue wrong answers with AI replacement attempt
+        // LEGACY MODE: Queue easy -> medium -> original retry
         // =============================================================
         setQuestionQueue(prev => {
-          const newQueue: QueuedQuestion[] = [...prev, {
-            question: currentQuestion,
-            isPenalty: false,
+          const queueStart = prev.length;
+
+          const sameConceptQuestions = module.questions.filter(
+            q => q.id !== currentQuestion.id && (q as any).conceptId === conceptId
+          );
+
+          const easyFallback = sameConceptQuestions.find(
+            q => ((q as any).difficultyTier === 1) || q.difficulty === 'beginner'
+          );
+
+          const mediumFallback = sameConceptQuestions.find(
+            q =>
+              q.id !== easyFallback?.id &&
+              (((q as any).difficultyTier === 2) || q.difficulty === 'intermediate')
+          );
+
+          const hasPremadeCascade = Boolean(easyFallback && mediumFallback);
+          if (!hasPremadeCascade) {
+            console.log('[AI] No same-concept easy/medium variants; using temporary placeholders and attempting AI replacements');
+          }
+
+          // Always queue easy -> medium -> original hard retry.
+          // If premade variants are missing, placeholders are replaced by AI when available.
+          const remediationQueue: QueuedQuestion[] = [
+            {
+              question: easyFallback || currentQuestion,
+              isPenalty: true,
+              conceptId,
+              difficultyTier: 1,
+              isInitialHardTest: false,
+              penaltyPosition: 0,
+            },
+            {
+              question: mediumFallback || currentQuestion,
+              isPenalty: true,
+              conceptId,
+              difficultyTier: 2,
+              isInitialHardTest: false,
+              penaltyPosition: 1,
+            },
+            {
+              question: currentQuestion,
+              isPenalty: true,
+              conceptId,
+              difficultyTier: 3 as const,
+              isInitialHardTest: false,
+              penaltyPosition: 2,
+            },
+          ];
+
+          const newQueue: QueuedQuestion[] = [...prev, ...remediationQueue];
+
+          // Keep concept in cascade until hard retry is passed.
+          setConceptsInCascade(prevCascade => new Set([...prevCascade, conceptId]));
+
+          // Register wrong answer for remediation tracking.
+          registerWrongAnswer(
+            currentQuestion.id,
             conceptId,
-            difficultyTier: 3 as const,
-            isInitialHardTest: true,
-          }];
+            currentQuestion.type,
+            lessonId
+          );
 
           if (canGenerateAIQuestions()) {
-            const queueIdx = prev.length;
             const userCtx = financial ? {
               monthlyIncome: financial.monthlyIncome,
               monthlyExpenses: financial.monthlyExpenses,
@@ -540,19 +606,44 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
               monthlyDebt: financial.totalDebt,
             } : undefined;
 
+            const domain = (lessonDomain || 'budgeting') as any;
+            const conceptName = currentQuestion.question.substring(0, 50);
+
             generateConceptQuestion(
               currentQuestion,
               conceptId,
-              currentQuestion.question.substring(0, 50),
-              (lessonDomain || 'budgeting') as any,
-              currentQuestion.difficulty as any || 'intermediate',
+              conceptName,
+              domain,
+              'beginner',
               userCtx
             ).then(aiQ => {
               if (aiQ) {
-                console.log('[AI] Generated replacement for legacy re-queue:', aiQ.id);
-                setAiReplacements(prevR => ({ ...prevR, [queueIdx]: aiQ }));
+                if (currentIndexRef.current >= queueStart) return;
+                console.log('[AI] Generated legacy easy remediation:', aiQ.id);
+                setAiReplacements(prevR => ({ ...prevR, [queueStart]: aiQ }));
               }
-            }).catch(() => {});
+            }).catch((error) => {
+              console.error('[AI] Failed legacy easy remediation generation:', error);
+            });
+
+            generateConceptQuestion(
+              currentQuestion,
+              conceptId,
+              conceptName,
+              domain,
+              'intermediate',
+              userCtx
+            ).then(aiQ => {
+              if (aiQ) {
+                if (currentIndexRef.current >= queueStart + 1) return;
+                console.log('[AI] Generated legacy medium remediation:', aiQ.id);
+                setAiReplacements(prevR => ({ ...prevR, [queueStart + 1]: aiQ }));
+              }
+            }).catch((error) => {
+              console.error('[AI] Failed legacy medium remediation generation:', error);
+            });
+          } else {
+            console.log('[AI] Skipping legacy remediation generation (Gemini unavailable or in cooldown)');
           }
 
           return newQueue;
@@ -587,7 +678,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       is_correct: result.isCorrect,
       response_time_ms: responseTimeMs,
       attempt_number: currentQueueItem.isPenalty ? (currentQueueItem.penaltyPosition || 0) + 1 : 1,
-      is_ai_generated: false,
+      is_ai_generated: currentQuestion.id.startsWith('ai-'),
     }).catch(() => {});
     
   }, [currentQuestion, currentQueueItem, module, gainXP, loseHeart, xpScale, lessonId, 
@@ -606,7 +697,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
     setIsAnswered(false);
     
     // Check if all concepts are mastered
-    const allConceptsMastered = module?.conceptVariants 
+    const allConceptsMastered = !isAdaptive ? true : module?.conceptVariants 
       ? module.conceptVariants.every(c => masteredConcepts.has(c.conceptId))
       : masteredConcepts.size >= (module?.questions.length || 0);
     
@@ -623,8 +714,8 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       // Mark lesson as complete in adaptive learning system for course progress
       recordLessonAttempt(lessonId, accuracy, totalAttempts * 30, true, false);
       
-      // Only award rewards if this is the FIRST completion (not a review)
-      if (!isAlreadyCompleted) {
+      // Rewards are only granted on the first quiz attempt for this module.
+      if (isFirstQuizAttempt) {
         addHearts(5);
         setHeartsEarned(5);
         
@@ -641,7 +732,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       
       // Haptic celebration!
       Haptics.quizComplete();
-      if (!isAlreadyCompleted) {
+      if (isFirstQuizAttempt) {
         Haptics.heartsEarned();
       }
       
@@ -651,8 +742,8 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         totalQuestions: totalAttempts,
         accuracy: score,
         conceptResults: Array.from(conceptResults.entries()),
-        heartsEarned: isAlreadyCompleted ? 0 : 5,
-        isReview: isAlreadyCompleted,
+        heartsEarned: isFirstQuizAttempt ? 5 : 0,
+        isReview: !isFirstQuizAttempt,
       });
 
       // Sync lesson progress to Supabase backend
@@ -677,8 +768,8 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       // Mark lesson as complete even if not all mastered
       recordLessonAttempt(lessonId, accuracy, totalAttempts * 30, true, false);
       
-      // Only award rewards if this is the FIRST completion (not a review)
-      if (!isAlreadyCompleted) {
+      // Rewards are only granted on the first quiz attempt for this module.
+      if (isFirstQuizAttempt) {
         addHearts(5);
         setHeartsEarned(5);
         recordLessonComplete(score === 100);
@@ -693,7 +784,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       
       // Haptic celebration!
       Haptics.quizComplete();
-      if (!isAlreadyCompleted) {
+      if (isFirstQuizAttempt) {
         Haptics.heartsEarned();
       }
 
@@ -714,7 +805,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       setCurrentIndex(prev => prev + 1);
     }
   }, [currentIndex, questionQueue, module, masteredConcepts, totalCorrect, totalAttempts, 
-      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult, recordLessonComplete, xpEarned, isAlreadyCompleted]);
+      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult, recordLessonComplete, xpEarned, isFirstQuizAttempt, isAdaptive]);
 
   // Handle completion dismiss
   const handleCompletionClose = useCallback(() => {

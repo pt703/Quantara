@@ -506,3 +506,40 @@ export async function getUserPerformanceSummary(): Promise<UserPerformanceSummar
     return null;
   }
 }
+
+// =============================================================================
+// ACCOUNT RESET
+// =============================================================================
+
+export async function resetUserAccountData(): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const userId = await getAuthUserId();
+  if (!userId) return false;
+
+  try {
+    const operations = await Promise.all([
+      supabase.from('quiz_results').delete().eq('user_id', userId),
+      supabase.from('learning_progress').delete().eq('user_id', userId),
+      supabase.from('skill_accuracy').delete().eq('user_id', userId),
+      supabase.from('user_profiles').delete().eq('id', userId),
+      supabase.from('financial_snapshots').delete().eq('id', userId),
+      supabase.from('gamification_stats').delete().eq('id', userId),
+      supabase.from('badge_progress').delete().eq('id', userId),
+    ]);
+
+    const hasError = operations.some((op) => Boolean(op.error));
+    if (hasError) {
+      operations.forEach((op, index) => {
+        if (op.error) {
+          console.log(`[Supabase] Reset op ${index} skipped:`, op.error.message);
+        }
+      });
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.log('[Supabase] Reset error:', err);
+    return false;
+  }
+}

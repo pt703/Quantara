@@ -1,6 +1,7 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useCallback } from "react";
 import { View, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -10,9 +11,10 @@ import Spacer from "@/components/Spacer";
 import { Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useUserData } from "@/hooks/useUserData";
-import { useLearningProgress } from "@/hooks/useLearningProgress";
+import { useModuleProgress } from "@/hooks/useModuleProgress";
 import { useAdaptiveRecommendations, AdaptiveRecommendation } from "@/hooks/useAdaptiveRecommendations";
-import { modules } from "../mock/modules";
+import { courses } from "../mock/courses";
+import { Course, LessonModule } from "@/types";
 
 type RootTabParamList = {
   HomeTab: undefined;
@@ -26,28 +28,108 @@ export default function HomeScreen() {
   const navigation = useNavigation<NavigationProp<RootTabParamList>>();
   const { theme } = useTheme();
   const { profile, financial } = useUserData();
-  const { getLessonStatus } = useLearningProgress();
+  const { moduleProgress, getLessonProgress, reload: reloadModuleProgress } = useModuleProgress();
   const { generateRecommendations, isLoading: recommendationsLoading, getAllPerformanceStats } = useAdaptiveRecommendations();
 
+  useFocusEffect(
+    useCallback(() => {
+      reloadModuleProgress();
+    }, [reloadModuleProgress])
+  );
+
   const continueLesson = useMemo(() => {
-    for (const module of modules) {
-      for (const lesson of module.lessons) {
-        const status = getLessonStatus(lesson.id);
-        if (status === 'in_progress') {
-          return { lesson, module };
+    type ContinueActivity = {
+      course: Course;
+      lesson: Course['lessons'][number];
+      module: LessonModule;
+      moduleIndex: number;
+      progress: number;
+      completedModules: number;
+      totalModules: number;
+    };
+
+    let latest: (ContinueActivity & { timestamp: number }) | null = null;
+
+    for (const course of courses) {
+      for (const lesson of course.lessons) {
+        const modules = lesson.modules || [];
+        if (modules.length === 0) continue;
+
+        for (let moduleIndex = 0; moduleIndex < modules.length; moduleIndex++) {
+          const module = modules[moduleIndex];
+          const progress = moduleProgress[module.id];
+          if (!progress?.lastAttemptDate) continue;
+          const timestamp = new Date(progress.lastAttemptDate).getTime();
+          if (!Number.isFinite(timestamp)) continue;
+
+          const lessonProgress = getLessonProgress(lesson.id, modules);
+          const completedModules = Object.values(lessonProgress.moduleProgress).filter(
+            (m) => m.status === 'completed'
+          ).length;
+
+          if (!latest || timestamp > latest.timestamp) {
+            latest = {
+              course,
+              lesson,
+              module,
+              moduleIndex,
+              timestamp,
+              completedModules,
+              totalModules: modules.length,
+              progress: modules.length > 0 ? completedModules / modules.length : 0,
+            };
+          }
         }
       }
     }
-    for (const module of modules) {
-      for (const lesson of module.lessons) {
-        const status = getLessonStatus(lesson.id);
-        if (status === 'not_started') {
-          return { lesson, module };
-        }
+
+    if (latest) {
+      const modules = latest.lesson.modules || [];
+      const firstIncompleteIndex = modules.findIndex((m) => {
+        const p = moduleProgress[m.id];
+        return !p || p.status !== 'completed';
+      });
+      const targetIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : latest.moduleIndex;
+      const targetModule = modules[targetIndex] || latest.module;
+
+      return {
+        ...latest,
+        module: targetModule,
+        moduleIndex: targetIndex,
+      };
+    }
+
+    // Fallback: first unstarted module in first incomplete lesson
+    for (const course of courses) {
+      for (const lesson of course.lessons) {
+        const modules = lesson.modules || [];
+        if (modules.length === 0) continue;
+        const lessonProgress = getLessonProgress(lesson.id, modules);
+        if (lessonProgress.overallStatus === 'completed' && lessonProgress.canProceed) continue;
+
+        const firstIncompleteIndex = modules.findIndex((m) => {
+          const p = moduleProgress[m.id];
+          return !p || p.status !== 'completed';
+        });
+        const targetIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : 0;
+        const completedModules = Object.values(lessonProgress.moduleProgress).filter(
+          (m) => m.status === 'completed'
+        ).length;
+
+        return {
+          course,
+          lesson,
+          module: modules[targetIndex],
+          moduleIndex: targetIndex,
+          completedModules,
+          totalModules: modules.length,
+          progress: modules.length > 0 ? completedModules / modules.length : 0,
+        };
       }
     }
+
     return null;
-  }, [getLessonStatus]);
+  }, [getLessonProgress, moduleProgress]);
 
   const adaptiveRecommendations = useMemo(() => {
     if (recommendationsLoading) return [];
@@ -130,25 +212,35 @@ export default function HomeScreen() {
             <ThemedText style={styles.cardTitle}>Continue Learning</ThemedText>
             <Spacer height={Spacing.md} />
 
-            <ThemedText style={styles.lessonTitle}>{continueLesson.lesson.title}</ThemedText>
+            <ThemedText style={styles.lessonTitle}>
+              {continueLesson.course.title}: {continueLesson.lesson.title}
+            </ThemedText>
             <ThemedText style={[styles.lessonMeta, { color: theme.textSecondary }]}>
-              {continueLesson.module.title} · {continueLesson.lesson.estimatedMinutes} min
+              {continueLesson.module.type === 'quiz'
+                ? 'Quiz'
+                : `Reading ${continueLesson.moduleIndex + 1}`} · {continueLesson.lesson.estimatedMinutes} min
+            </ThemedText>
+            <ThemedText style={[styles.lessonMeta, { color: theme.textSecondary }]}>
+              {continueLesson.completedModules}/{continueLesson.totalModules} modules completed
             </ThemedText>
 
             <Spacer height={Spacing.md} />
-            <ProgressBar progress={continueLesson.module.progress} />
+            <ProgressBar progress={continueLesson.progress} />
 
             <Spacer height={Spacing.lg} />
 
             <Pressable
               style={[styles.primaryButton, { backgroundColor: theme.primary }]}
               onPress={() => {
+                // Route through CourseDetail first so back stack remains:
+                // Module -> CourseDetail -> Learn.
                 // @ts-ignore - nested navigation typing is complex
                 navigation.navigate('LearnTab', {
-                  screen: 'Lesson',
+                  screen: 'CourseDetail',
                   params: {
-                    lessonId: continueLesson.lesson.id,
-                    moduleId: continueLesson.module.id,
+                    courseId: continueLesson.course.id,
+                    resumeLessonId: continueLesson.lesson.id,
+                    resumeModuleId: continueLesson.module.id,
                   },
                 });
               }}

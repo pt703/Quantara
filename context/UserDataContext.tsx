@@ -2,9 +2,33 @@ import React, { createContext, useContext, useCallback, useEffect, useState, use
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserProfile, FinancialSnapshot } from '../types';
 import { syncProfile, syncFinancialSnapshot, fetchProfile, fetchFinancialSnapshot } from '@/services/supabaseDataService';
+import { useAuthContext } from '@/context/AuthContext';
 
-const PROFILE_KEY = 'user_profile';
-const FINANCIAL_KEY = 'user_financial';
+const LEGACY_PROFILE_KEY = 'user_profile';
+const LEGACY_FINANCIAL_KEY = 'user_financial';
+const LEGACY_GLOBAL_STATE_KEYS = [
+  '@quantara_bandit_state',
+  '@quantara_module_progress',
+  '@quantara_wrong_answer_registry',
+  '@quantara_skill_accuracy',
+  '@quantara/badges',
+  '@quantara/badge_stats',
+  '@quantara_notification_settings',
+  'quantara_gamification_state',
+  'quantara_skill_profile',
+  'quantara_completed_lessons',
+  'quantara_lesson_attempts',
+  'quantara_assessed_courses',
+  'quantara_baseline_assessments',
+];
+
+function getProfileKey(userId: string | null): string {
+  return `user_profile:${userId || 'guest'}`;
+}
+
+function getFinancialKey(userId: string | null): string {
+  return `user_financial:${userId || 'guest'}`;
+}
 
 const DEFAULT_PROFILE: UserProfile = {
   name: 'Nemo',
@@ -38,21 +62,40 @@ interface UserDataProviderProps {
 }
 
 export function UserDataProvider({ children }: UserDataProviderProps) {
+  const { user, isLoading: authLoading } = useAuthContext();
   const [profile, setProfileState] = useState<UserProfile>(DEFAULT_PROFILE);
   const [financial, setFinancialState] = useState<FinancialSnapshot>(DEFAULT_FINANCIAL);
   const [loading, setLoading] = useState(true);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (authLoading) return;
+    loadData(user?.id || null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user?.id]);
 
-  const loadData = async () => {
+  const loadData = async (userId: string | null) => {
     try {
       setLoading(true);
+      // Only clear cross-account local state on an actual account switch
+      // (e.g., userA -> userB), not on initial app startup restore.
+      if (activeUserIdRef.current && activeUserIdRef.current !== userId) {
+        if (syncTimerRef.current) {
+          clearTimeout(syncTimerRef.current);
+          syncTimerRef.current = null;
+        }
+        await AsyncStorage.multiRemove(LEGACY_GLOBAL_STATE_KEYS);
+        setProfileState(DEFAULT_PROFILE);
+        setFinancialState(DEFAULT_FINANCIAL);
+      }
+
+      const profileKey = getProfileKey(userId);
+      const financialKey = getFinancialKey(userId);
+
       const [profileData, financialData] = await Promise.all([
-        AsyncStorage.getItem(PROFILE_KEY),
-        AsyncStorage.getItem(FINANCIAL_KEY),
+        AsyncStorage.getItem(profileKey),
+        AsyncStorage.getItem(financialKey),
       ]);
 
       let loadedProfile = profileData ? JSON.parse(profileData) : null;
@@ -66,16 +109,20 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
 
         if (remoteProfile && !loadedProfile) {
           loadedProfile = remoteProfile;
-          AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(remoteProfile));
+          AsyncStorage.setItem(profileKey, JSON.stringify(remoteProfile));
         }
         if (remoteFinancial && !loadedFinancial) {
           loadedFinancial = remoteFinancial;
-          AsyncStorage.setItem(FINANCIAL_KEY, JSON.stringify(remoteFinancial));
+          AsyncStorage.setItem(financialKey, JSON.stringify(remoteFinancial));
         }
       }
 
       if (loadedProfile) setProfileState(loadedProfile);
       if (loadedFinancial) setFinancialState(loadedFinancial);
+      activeUserIdRef.current = userId;
+
+      // Clean up old unscoped keys so they don't leak across accounts.
+      AsyncStorage.multiRemove([LEGACY_PROFILE_KEY, LEGACY_FINANCIAL_KEY]).catch(() => {});
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
@@ -94,31 +141,33 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     try {
       setProfileState(current => {
         const newValue = value instanceof Function ? value(current) : value;
-        AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(newValue));
+        const profileKey = getProfileKey(user?.id || null);
+        AsyncStorage.setItem(profileKey, JSON.stringify(newValue));
         debouncedSync(() => syncProfile(newValue));
         return newValue;
       });
     } catch (error) {
       console.error('Error saving profile:', error);
     }
-  }, [debouncedSync]);
+  }, [debouncedSync, user?.id]);
 
   const setFinancial = useCallback(async (value: FinancialSnapshot | ((prev: FinancialSnapshot) => FinancialSnapshot)) => {
     try {
       setFinancialState(current => {
         const newValue = value instanceof Function ? value(current) : value;
-        AsyncStorage.setItem(FINANCIAL_KEY, JSON.stringify(newValue));
+        const financialKey = getFinancialKey(user?.id || null);
+        AsyncStorage.setItem(financialKey, JSON.stringify(newValue));
         debouncedSync(() => syncFinancialSnapshot(newValue));
         return newValue;
       });
     } catch (error) {
       console.error('Error saving financial:', error);
     }
-  }, [debouncedSync]);
+  }, [debouncedSync, user?.id]);
 
   const refreshData = useCallback(async () => {
-    await loadData();
-  }, []);
+    await loadData(user?.id || null);
+  }, [user?.id]);
 
   return (
     <UserDataContext.Provider

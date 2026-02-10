@@ -15,7 +15,8 @@
 
 import React, { useMemo } from "react";
 import { StyleSheet, Pressable, View } from "react-native";
-import { showAlert } from '@/utils/crossPlatformAlert';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { showAlert, showConfirmAlert } from '@/utils/crossPlatformAlert';
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from "@/components/ThemedText";
@@ -28,8 +29,16 @@ import { useTheme } from "@/hooks/useTheme";
 import { useUserData } from "@/hooks/useUserData";
 import { useAuthContext } from "@/context/AuthContext";
 import { useBadges } from "@/hooks/useBadges";
+import { useLearningMode } from "@/hooks/useLearningMode";
+import { useGamification } from "@/hooks/useGamification";
+import { useModuleProgress } from "@/hooks/useModuleProgress";
+import { useSkillAccuracy } from "@/hooks/useSkillAccuracy";
+import { useWrongAnswerRegistry } from "@/hooks/useWrongAnswerRegistry";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
+import { resetUserAccountData } from "@/services/supabaseDataService";
 import { Badge } from "@/mock/badges";
+import { DEFAULT_SKILLS, MAX_HEARTS } from "@/types";
+import { createInitialBanditState } from "@/services/ContextualBandit";
 
 // =============================================================================
 // TYPES
@@ -45,9 +54,41 @@ type ProfileScreenProps = {
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { theme } = useTheme();
-  const { profile, financial } = useUserData();
+  const { profile, financial, setProfile, setFinancial, refreshData } = useUserData();
   const { signOut, user } = useAuthContext();
   const { unlockedBadges, allBadges, isBadgeUnlocked, stats } = useBadges();
+  const { mode, setMode } = useLearningMode();
+  const { reload: reloadGamification } = useGamification();
+  const { reload: reloadModuleProgress } = useModuleProgress();
+  const { resetAll: resetSkillAccuracy } = useSkillAccuracy();
+  const { clearRegistry } = useWrongAnswerRegistry();
+  const displayName = useMemo(() => {
+    const emailPrefix = user?.email?.split('@')[0]?.trim();
+    if (emailPrefix) return emailPrefix;
+    const profileName = profile.name?.trim();
+    if (profileName) return profileName;
+    return 'User';
+  }, [user?.email, profile.name]);
+
+  const handleModeChange = (nextMode: 'adaptive' | 'static') => {
+    if (nextMode === mode) return;
+    console.log('[Learning Mode] Change requested', { from: mode, to: nextMode });
+    showConfirmAlert(
+      `Switch to ${nextMode === 'adaptive' ? 'Adaptive' : 'Static'} mode?`,
+      nextMode === 'adaptive'
+        ? 'Adaptive mode uses personalization and AI for remediation. Continue?'
+        : 'Static mode disables adaptive personalization and AI remediation. Continue?',
+      () => {
+        console.log('[Learning Mode] Change confirmed', { from: mode, to: nextMode });
+        setMode(nextMode);
+      },
+      'Confirm',
+      'Cancel',
+      () => {
+        console.log('[Learning Mode] Change cancelled', { from: mode, to: nextMode });
+      }
+    );
+  };
 
   // Handle sign out with error handling
   const handleSignOut = async () => {
@@ -55,6 +96,142 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     if (error) {
       showAlert('Error', 'Failed to sign out. Please try again.');
     }
+  };
+
+  const handleResetAccountData = () => {
+    showConfirmAlert(
+      'Reset all data?',
+      'This will reset your progress, lessons, quiz history, badges, and financial inputs for this account. Continue?',
+      async () => {
+        try {
+          const userId = user?.id || null;
+          const scopedKeys = [
+            `user_profile:${userId || 'guest'}`,
+            `user_financial:${userId || 'guest'}`,
+            `learning_mode:${userId || 'guest'}`,
+          ];
+          const globalKeys = [
+            'user_profile',
+            'user_financial',
+            'learning_progress',
+            'quantara_bandit_state',
+            '@quantara_bandit_state',
+            '@quantara_module_progress',
+            '@quantara_wrong_answer_registry',
+            '@quantara_skill_accuracy',
+            '@quantara/badges',
+            '@quantara/badge_stats',
+            '@quantara_notification_settings',
+            'quantara_gamification_state',
+            'quantara_skill_profile',
+            'quantara_completed_lessons',
+            'quantara_lesson_attempts',
+            'quantara_assessed_courses',
+            'quantara_baseline_assessments',
+            'quantara_achievements',
+            'quantara_stats',
+          ];
+
+          const defaultGamification = {
+            hearts: 0,
+            maxHearts: MAX_HEARTS,
+            xp: 0,
+            todayXP: 0,
+            todayXPDate: '',
+            level: 1,
+            streak: 0,
+            longestStreak: 0,
+            lastActiveDate: '',
+            lastActivityTimestamp: '',
+            heartsLastRefilled: new Date().toISOString(),
+            activeDays: [],
+          };
+
+          const defaultSkillAccuracy = {
+            budgeting: { correct: 0, total: 0 },
+            saving: { correct: 0, total: 0 },
+            debt: { correct: 0, total: 0 },
+            investing: { correct: 0, total: 0 },
+            credit: { correct: 0, total: 0 },
+          };
+
+          const defaultSkillProfile = {
+            ...DEFAULT_SKILLS,
+            lastUpdated: new Date().toISOString(),
+          };
+
+          const defaultBadgeStats = {
+            quizCount: 0,
+            lessonCount: 0,
+            perfectQuizCount: 0,
+            challengeCount: 0,
+            totalXp: 0,
+            currentStreak: 0,
+            hasSavingsGoal: false,
+            completedDomains: [],
+          };
+
+          const defaultAchievementStats = {
+            lessonsCompleted: 0,
+            coursesCompleted: 0,
+            perfectScores: 0,
+          };
+
+          await AsyncStorage.multiRemove(scopedKeys);
+          await AsyncStorage.multiSet([
+            ['learning_progress', JSON.stringify({})],
+            ['quantara_bandit_state', JSON.stringify(createInitialBanditState())],
+            ['@quantara_bandit_state', JSON.stringify(createInitialBanditState())],
+            ['@quantara_module_progress', JSON.stringify({})],
+            ['@quantara_wrong_answer_registry', JSON.stringify([])],
+            ['@quantara_skill_accuracy', JSON.stringify(defaultSkillAccuracy)],
+            ['@quantara/badges', JSON.stringify([])],
+            ['@quantara/badge_stats', JSON.stringify(defaultBadgeStats)],
+            ['@quantara_notification_settings', JSON.stringify({})],
+            ['quantara_gamification_state', JSON.stringify(defaultGamification)],
+            ['quantara_skill_profile', JSON.stringify(defaultSkillProfile)],
+            ['quantara_completed_lessons', JSON.stringify([])],
+            ['quantara_lesson_attempts', JSON.stringify([])],
+            ['quantara_assessed_courses', JSON.stringify([])],
+            ['quantara_baseline_assessments', JSON.stringify([])],
+            ['quantara_achievements', JSON.stringify([])],
+            ['quantara_stats', JSON.stringify(defaultAchievementStats)],
+          ]);
+          await AsyncStorage.multiRemove(['user_profile', 'user_financial', ...globalKeys]);
+
+          const remoteResetOk = await resetUserAccountData();
+          if (!remoteResetOk) {
+            console.log('[Reset] Remote reset was partial or unavailable; local reset completed.');
+          }
+
+          await setMode('adaptive');
+          setProfile({
+            name: user?.email?.split('@')[0] || 'User',
+            avatar: 0,
+          });
+          setFinancial({
+            monthlyIncome: 0,
+            monthlyExpenses: 0,
+            totalDebt: 0,
+            savingsGoal: 0,
+            currentSavings: 0,
+            subscriptions: [],
+            debtItems: [],
+            portfolioAssets: [],
+          });
+
+          clearRegistry();
+          await resetSkillAccuracy();
+          await Promise.all([refreshData(), reloadGamification(), reloadModuleProgress()]);
+          showAlert('Reset complete', 'Your account data has been reset for a fresh demo state.');
+        } catch (error) {
+          console.error('Failed to reset account data:', error);
+          showAlert('Reset failed', 'Could not reset all data. Please try again.');
+        }
+      },
+      'Confirm',
+      'Cancel'
+    );
   };
 
   // Calculate subscription savings from cancelled subscriptions
@@ -81,13 +258,13 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       <View style={styles.header}>
         <View style={[styles.avatar, { backgroundColor: theme.primary + '20' }]}>
           <ThemedText style={[styles.avatarText, { color: theme.primary }]}>
-            {profile.name.charAt(0).toUpperCase()}
+            {displayName.charAt(0).toUpperCase()}
           </ThemedText>
         </View>
 
         <Spacer height={Spacing.md} />
 
-        <ThemedText style={styles.name}>{profile.name}</ThemedText>
+        <ThemedText style={styles.name}>{displayName}</ThemedText>
       </View>
 
       <Spacer height={Spacing.xl} />
@@ -300,6 +477,81 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         </ThemedView>
       </Pressable>
 
+      <Spacer height={Spacing.lg} />
+
+      {/* ================================================================== */}
+      {/* LEARNING MODE */}
+      {/* ================================================================== */}
+      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.cardHeader}>
+          <ThemedText style={styles.cardTitle}>Learning Mode</ThemedText>
+          <ThemedText style={[styles.modeHint, { color: theme.textSecondary }]}>
+            For benchmarking
+          </ThemedText>
+        </View>
+
+        <Spacer height={Spacing.md} />
+
+        <View style={[styles.modeToggle, { backgroundColor: theme.backgroundSecondary }]}>
+          <Pressable
+            onPress={() => handleModeChange('adaptive')}
+            style={[
+              styles.modeButton,
+              mode === 'adaptive' && { backgroundColor: theme.primary },
+            ]}
+          >
+            <ThemedText
+              style={[
+                styles.modeButtonText,
+                { color: mode === 'adaptive' ? '#FFFFFF' : theme.text },
+              ]}
+            >
+              Adaptive
+            </ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => handleModeChange('static')}
+            style={[
+              styles.modeButton,
+              mode === 'static' && { backgroundColor: theme.primary },
+            ]}
+          >
+            <ThemedText
+              style={[
+                styles.modeButtonText,
+                { color: mode === 'static' ? '#FFFFFF' : theme.text },
+              ]}
+            >
+              Static
+            </ThemedText>
+          </Pressable>
+        </View>
+
+        <Spacer height={Spacing.sm} />
+        <ThemedText style={[styles.tapToEdit, { color: theme.textSecondary }]}>
+          Adaptive uses personalization and AI. Static uses fixed flow.
+        </ThemedText>
+      </ThemedView>
+
+      <Spacer height={Spacing.lg} />
+
+      <Pressable
+        style={({ pressed }) => [
+          styles.coachButton,
+          { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+        ]}
+        onPress={() => navigation.navigate('AIFinancialCoach')}
+      >
+        <Feather name="message-circle" size={20} color={theme.primary} />
+        <View style={styles.coachTextWrap}>
+          <ThemedText style={styles.coachTitle}>AI Financial Coach</ThemedText>
+          <ThemedText style={[styles.coachSubtitle, { color: theme.textSecondary }]}>
+            Ask money questions anytime
+          </ThemedText>
+        </View>
+        <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+      </Pressable>
+
       <Spacer height={Spacing.xl} />
 
       {/* ================================================================== */}
@@ -354,6 +606,19 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             <Feather name="log-out" size={18} color={theme.error} />
             <ThemedText style={[styles.signOutText, { color: theme.error }]}>
               Sign Out
+            </ThemedText>
+          </Pressable>
+          <Spacer height={Spacing.md} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.resetButton,
+              { borderColor: theme.warning, opacity: pressed ? 0.7 : 1 },
+            ]}
+            onPress={handleResetAccountData}
+          >
+            <Feather name="refresh-ccw" size={18} color={theme.warning} />
+            <ThemedText style={[styles.resetText, { color: theme.warning }]}>
+              Reset
             </ThemedText>
           </Pressable>
         </View>
@@ -464,6 +729,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: Spacing.md,
   },
+  coachButton: {
+    marginHorizontal: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.md,
+  },
+  coachTextWrap: {
+    flex: 1,
+  },
+  coachTitle: {
+    ...Typography.headline,
+    fontWeight: '600',
+  },
+  coachSubtitle: {
+    ...Typography.caption,
+    marginTop: 2,
+  },
   notificationButtonText: {
     ...Typography.headline,
     fontWeight: '600',
@@ -487,6 +773,20 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   signOutText: {
+    ...Typography.body,
+    fontWeight: '600',
+  },
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    gap: Spacing.sm,
+  },
+  resetText: {
     ...Typography.body,
     fontWeight: '600',
   },
@@ -515,6 +815,25 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     textAlign: 'center',
     fontSize: 10,
+  },
+  modeHint: {
+    ...Typography.caption,
+  },
+  modeToggle: {
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.xs,
+    flexDirection: 'row',
+    gap: Spacing.xs,
+  },
+  modeButton: {
+    flex: 1,
+    borderRadius: BorderRadius.sm,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+  },
+  modeButtonText: {
+    ...Typography.subhead,
+    fontWeight: '600',
   },
   moreBadges: {
     ...Typography.footnote,

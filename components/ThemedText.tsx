@@ -37,19 +37,22 @@ export function ThemedText({
   const getTypeStyle = () => {
     switch (type) {
       case "h1":
-        return Typography.h1;
+        return Typography.largeTitle;
       case "h2":
-        return Typography.h2;
+        return Typography.title;
       case "h3":
-        return Typography.h3;
+        return Typography.headline;
       case "h4":
-        return Typography.h4;
+        return Typography.callout;
       case "body":
         return Typography.body;
       case "small":
-        return Typography.small;
+        return Typography.footnote;
       case "link":
-        return Typography.link;
+        return {
+          ...Typography.body,
+          textDecorationLine: "underline" as const,
+        };
       default:
         return Typography.body;
     }

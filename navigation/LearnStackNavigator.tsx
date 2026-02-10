@@ -28,7 +28,11 @@ export type LearnStackParamList = {
   ModuleDetail: { moduleId: string };
   Lesson: { lessonId: string; moduleId: string };
   // New course-based navigation
-  CourseDetail: { courseId: string };
+  CourseDetail: {
+    courseId: string;
+    resumeLessonId?: string;
+    resumeModuleId?: string;
+  };
   LessonPlayer: { lessonId: string; courseId: string };
   // Pre-assessment for first-time course entry
   PreAssessment: { courseId: string };

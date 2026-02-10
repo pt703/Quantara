@@ -543,7 +543,8 @@ User's Financial Context:
 
 export async function generateSimilarQuestion(
   originalQuestion: Question,
-  attemptNumber: number = 1
+  attemptNumber: number = 1,
+  domain?: SkillDomain
 ): Promise<Question | null> {
   if (!isGeminiConfigured()) {
     console.log('Gemini not configured, returning null for similar question');
@@ -577,7 +578,7 @@ REQUIREMENTS:
 - Create a NEW question that tests the SAME concept but with DIFFERENT numbers/scenarios
 - Keep the same question type: ${typeDescriptions[originalQuestion.type] || originalQuestion.type}
 - Make it slightly ${attemptNumber > 1 ? 'easier' : 'similar in difficulty'}
-${performanceData && performanceData.weakDomains.includes(originalQuestion.difficulty || '') ? '- This is in a weak area for the user - include extra teaching in the explanation' : ''}
+${domain && performanceData && performanceData.weakDomains.includes(domain) ? '- This is in a weak area for the user - include extra teaching in the explanation' : ''}
 - Use different example numbers or scenarios
 - The question should feel fresh, not repetitive
 

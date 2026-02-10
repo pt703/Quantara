@@ -20,6 +20,7 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
@@ -61,6 +62,12 @@ interface ContentBlockRendererProps {
   theme: any;
 }
 
+const CONTENT_IMAGE_ASSETS = {
+  'welcome-hero': require('../assets/images/welcome-hero.png'),
+  'app-logo': require('../assets/images/app-logo.png'),
+  'quantara-logo': require('../assets/images/quantara-logo.png'),
+} as const;
+
 function ContentBlockRenderer({ block, index, theme }: ContentBlockRendererProps) {
   // Animation varies by block type for visual interest
   const getAnimation = () => {
@@ -88,6 +95,8 @@ function ContentBlockRenderer({ block, index, theme }: ContentBlockRendererProps
         return [styles.contentBlock, styles.warningBlock, { backgroundColor: '#EF444410', borderColor: '#EF4444' }];
       case 'interactive':
         return [styles.contentBlock, styles.interactiveBlock, { backgroundColor: theme.backgroundSecondary, borderColor: theme.primary }];
+      case 'image':
+        return [styles.contentBlock, styles.imageBlock, { backgroundColor: theme.card, borderColor: theme.border }];
       default:
         // Plain text blocks have clean styling
         return [styles.contentBlock, styles.textBlock];
@@ -111,6 +120,28 @@ function ContentBlockRenderer({ block, index, theme }: ContentBlockRendererProps
   };
 
   const blockInfo = getBlockInfo();
+
+  if (block.type === 'image') {
+    const imageSource = block.imageKey ? CONTENT_IMAGE_ASSETS[block.imageKey] : null;
+    if (!imageSource) return null;
+
+    return (
+      <Animated.View entering={getAnimation()} style={getBlockStyle()}>
+        <Image
+          source={imageSource}
+          style={styles.contentImage}
+          contentFit="cover"
+          accessibilityLabel={block.imageAlt || 'Lesson visual'}
+          transition={200}
+        />
+        {block.content?.trim() ? (
+          <ThemedText style={[styles.imageCaption, { color: theme.textSecondary }]}>
+            {block.content.trim()}
+          </ThemedText>
+        ) : null}
+      </Animated.View>
+    );
+  }
 
   // Parse content to handle markdown-like formatting
   const renderContent = (content: string) => {
@@ -492,6 +523,20 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     gap: Spacing.sm,
+  },
+  imageBlock: {
+    padding: Spacing.sm,
+    overflow: 'hidden',
+  },
+  contentImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: BorderRadius.lg,
+  },
+  imageCaption: {
+    ...Typography.caption,
+    marginTop: Spacing.sm,
+    textAlign: 'center',
   },
   contentText: {
     ...Typography.body,
