@@ -13,6 +13,7 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuthContext } from '@/context/AuthContext';
 import { 
   ModuleProgress, 
   LessonProgress, 
@@ -21,7 +22,10 @@ import {
 } from '../types';
 
 // Storage key for module progress
-const MODULE_PROGRESS_KEY = '@quantara_module_progress';
+const LEGACY_MODULE_PROGRESS_KEY = '@quantara_module_progress';
+function getModuleProgressKey(userId: string | null): string {
+  return `@quantara_module_progress:${userId || 'guest'}`;
+}
 
 // Mastery threshold for quiz modules (80% to pass)
 export const DEFAULT_MASTERY_THRESHOLD = 0.8;
@@ -68,34 +72,48 @@ export interface UseModuleProgressReturn {
 }
 
 export function useModuleProgress(): UseModuleProgressReturn {
+  const { user } = useAuthContext();
+  const moduleProgressKey = useMemo(() => getModuleProgressKey(user?.id || null), [user?.id]);
+
   // State for all module progress
   const [moduleProgress, setModuleProgress] = useState<Record<string, ModuleProgress>>({});
-  
-  // Load progress from storage on mount
-  useEffect(() => {
-    loadProgress();
-  }, []);
   
   // Load progress from AsyncStorage
   const loadProgress = useCallback(async () => {
     try {
-      const stored = await AsyncStorage.getItem(MODULE_PROGRESS_KEY);
-      if (stored) {
-        setModuleProgress(JSON.parse(stored));
+      const [scopedStored, legacyStored] = await Promise.all([
+        AsyncStorage.getItem(moduleProgressKey),
+        AsyncStorage.getItem(LEGACY_MODULE_PROGRESS_KEY),
+      ]);
+
+      if (scopedStored) {
+        setModuleProgress(JSON.parse(scopedStored));
+        return;
       }
+
+      if (legacyStored) {
+        const parsed = JSON.parse(legacyStored);
+        setModuleProgress(parsed);
+        // Migrate one-time to user-scoped key to avoid cross-account leaks.
+        await AsyncStorage.setItem(moduleProgressKey, legacyStored);
+        await AsyncStorage.removeItem(LEGACY_MODULE_PROGRESS_KEY);
+        return;
+      }
+
+      setModuleProgress({});
     } catch (error) {
       console.error('Failed to load module progress:', error);
     }
-  }, []);
+  }, [moduleProgressKey]);
   
   // Save progress to AsyncStorage
   const saveProgress = useCallback(async (progress: Record<string, ModuleProgress>) => {
     try {
-      await AsyncStorage.setItem(MODULE_PROGRESS_KEY, JSON.stringify(progress));
+      await AsyncStorage.setItem(moduleProgressKey, JSON.stringify(progress));
     } catch (error) {
       console.error('Failed to save module progress:', error);
     }
-  }, []);
+  }, [moduleProgressKey]);
   
   // Get progress for a specific module
   const getModuleProgress = useCallback((moduleId: string): ModuleProgress | undefined => {
@@ -252,8 +270,14 @@ export function useModuleProgress(): UseModuleProgressReturn {
   // Clear all progress
   const clearAllProgress = useCallback(() => {
     setModuleProgress({});
-    AsyncStorage.removeItem(MODULE_PROGRESS_KEY);
-  }, []);
+    AsyncStorage.multiRemove([moduleProgressKey, LEGACY_MODULE_PROGRESS_KEY]);
+  }, [moduleProgressKey]);
+
+  // Reload when account context changes.
+  useEffect(() => {
+    setModuleProgress({});
+    loadProgress();
+  }, [loadProgress]);
   
   return {
     moduleProgress,

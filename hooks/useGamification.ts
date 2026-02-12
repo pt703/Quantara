@@ -15,10 +15,10 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useStorage } from './useStorage';
+import { useAuthContext } from '@/context/AuthContext';
 import { 
   GamificationState, 
   MAX_HEARTS, 
-  HEART_REGEN_MINUTES, 
   XP_PER_LEVEL,
   STREAK_XP_BONUS,
   Achievement,
@@ -31,7 +31,9 @@ import { syncGamification } from '@/services/supabaseDataService';
 // =============================================================================
 
 // Storage key for persisting gamification state
-const GAMIFICATION_STORAGE_KEY = 'quantara_gamification_state';
+function getGamificationStorageKey(userId: string | null): string {
+  return `quantara_gamification_state:${userId || 'guest'}`;
+}
 
 // Default state for new users
 // NOTE: Users start with 0 hearts and earn them through course completion
@@ -167,56 +169,6 @@ function getLevelProgress(xp: number): number {
 }
 
 /**
- * Checks if two dates are the same calendar day.
- * Used for streak calculations.
- */
-function isSameDay(date1: Date, date2: Date): boolean {
-  return (
-    date1.getFullYear() === date2.getFullYear() &&
-    date1.getMonth() === date2.getMonth() &&
-    date1.getDate() === date2.getDate()
-  );
-}
-
-/**
- * Checks if date1 is exactly one day before date2.
- * Used for streak continuation checks.
- */
-function isYesterday(date1: Date, date2: Date): boolean {
-  const yesterday = new Date(date2);
-  yesterday.setDate(yesterday.getDate() - 1);
-  return isSameDay(date1, yesterday);
-}
-
-/**
- * Checks if the given date is within the last 24 hours.
- * Used to determine if streak should be maintained or reset.
- */
-function isWithin24Hours(dateStr: string): boolean {
-  if (!dateStr) return false;
-  const lastActive = new Date(dateStr);
-  const now = new Date();
-  const hoursDiff = (now.getTime() - lastActive.getTime()) / (1000 * 60 * 60);
-  return hoursDiff <= 24;
-}
-
-/**
- * Calculates how many hearts should have regenerated based on time.
- * Hearts regenerate at HEART_REGEN_MINUTES (30) per heart.
- */
-function calculateRegeneratedHearts(lastRefillTime: string, currentHearts: number): number {
-  const lastRefill = new Date(lastRefillTime);
-  const now = new Date();
-  const minutesPassed = (now.getTime() - lastRefill.getTime()) / 1000 / 60;
-  
-  // Calculate how many hearts should have regenerated
-  const heartsToRegen = Math.floor(minutesPassed / HEART_REGEN_MINUTES);
-  
-  // Cap at max hearts
-  return Math.min(currentHearts + heartsToRegen, MAX_HEARTS);
-}
-
-/**
  * Gets the streak bonus multiplier based on current streak.
  * Longer streaks give bigger XP bonuses.
  */
@@ -249,9 +201,11 @@ function getStreakMultiplier(streak: number): number {
  * ```
  */
 export function useGamification() {
+  const { user } = useAuthContext();
+  const storageKey = useMemo(() => getGamificationStorageKey(user?.id || null), [user?.id]);
   // Load persisted state from AsyncStorage
   const [storedState, setStoredState, isLoading, reloadState, stateVersion] = useStorage<GamificationState>(
-    GAMIFICATION_STORAGE_KEY,
+    storageKey,
     DEFAULT_GAMIFICATION_STATE
   );
 
@@ -310,34 +264,20 @@ export function useGamification() {
     }, 2000);
   }, []);
 
-  // When stored state loads or changes, apply heart regeneration and sync local state
+  // When stored state loads or changes, sync local state.
   useEffect(() => {
     if (!isLoading && storedState) {
-      // Calculate regenerated hearts based on time passed
-      const regeneratedHearts = calculateRegeneratedHearts(
-        storedState.heartsLastRefilled,
-        storedState.hearts
-      );
-
-      // Update state with regenerated hearts
       const updatedState: GamificationState = {
         ...storedState,
-        hearts: regeneratedHearts,
+        hearts: storedState.hearts,
         level: calculateLevel(storedState.xp),
-        heartsLastRefilled: regeneratedHearts > storedState.hearts 
-          ? new Date().toISOString() 
-          : storedState.heartsLastRefilled,
+        heartsLastRefilled: storedState.heartsLastRefilled,
       };
 
       setState(updatedState);
       stateRef.current = updatedState;
-      
-      // Persist if hearts changed
-      if (regeneratedHearts !== storedState.hearts) {
-        setStoredState(updatedState);
-      }
     }
-  }, [isLoading, storedState, stateVersion, setStoredState]);
+  }, [isLoading, storedState, stateVersion]);
 
   // ==========================================================================
   // HEART MANAGEMENT

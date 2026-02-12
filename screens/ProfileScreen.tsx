@@ -28,17 +28,16 @@ import { Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useUserData } from "@/hooks/useUserData";
 import { useAuthContext } from "@/context/AuthContext";
-import { useBadges } from "@/hooks/useBadges";
-import { useLearningMode } from "@/hooks/useLearningMode";
 import { useGamification } from "@/hooks/useGamification";
 import { useModuleProgress } from "@/hooks/useModuleProgress";
 import { useSkillAccuracy } from "@/hooks/useSkillAccuracy";
 import { useWrongAnswerRegistry } from "@/hooks/useWrongAnswerRegistry";
+import { useCourseCertificates } from "@/hooks/useCourseCertificates";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
 import { resetUserAccountData } from "@/services/supabaseDataService";
-import { Badge } from "@/mock/badges";
 import { DEFAULT_SKILLS, MAX_HEARTS } from "@/types";
 import { createInitialBanditState } from "@/services/ContextualBandit";
+import { courses } from "@/mock/courses";
 
 // =============================================================================
 // TYPES
@@ -56,8 +55,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { theme } = useTheme();
   const { profile, financial, setProfile, setFinancial, refreshData } = useUserData();
   const { signOut, user } = useAuthContext();
-  const { unlockedBadges, allBadges, isBadgeUnlocked, stats } = useBadges();
-  const { mode, setMode } = useLearningMode();
+  const { unlockedCourseIds, isCertificateUnlocked, reload: reloadCertificates } = useCourseCertificates();
   const { reload: reloadGamification } = useGamification();
   const { reload: reloadModuleProgress } = useModuleProgress();
   const { resetAll: resetSkillAccuracy } = useSkillAccuracy();
@@ -69,26 +67,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     if (profileName) return profileName;
     return 'User';
   }, [user?.email, profile.name]);
-
-  const handleModeChange = (nextMode: 'adaptive' | 'static') => {
-    if (nextMode === mode) return;
-    console.log('[Learning Mode] Change requested', { from: mode, to: nextMode });
-    showConfirmAlert(
-      `Switch to ${nextMode === 'adaptive' ? 'Adaptive' : 'Static'} mode?`,
-      nextMode === 'adaptive'
-        ? 'Adaptive mode uses personalization and AI for remediation. Continue?'
-        : 'Static mode disables adaptive personalization and AI remediation. Continue?',
-      () => {
-        console.log('[Learning Mode] Change confirmed', { from: mode, to: nextMode });
-        setMode(nextMode);
-      },
-      'Confirm',
-      'Cancel',
-      () => {
-        console.log('[Learning Mode] Change cancelled', { from: mode, to: nextMode });
-      }
-    );
-  };
 
   // Handle sign out with error handling
   const handleSignOut = async () => {
@@ -109,6 +87,8 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             `user_profile:${userId || 'guest'}`,
             `user_financial:${userId || 'guest'}`,
             `learning_mode:${userId || 'guest'}`,
+            `quantara_gamification_state:${userId || 'guest'}`,
+            `@quantara_module_progress:${userId || 'guest'}`,
           ];
           const globalKeys = [
             'user_profile',
@@ -130,6 +110,8 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             'quantara_baseline_assessments',
             'quantara_achievements',
             'quantara_stats',
+            'quantara_course_certificates',
+            `quantara_course_certificates:${userId || 'guest'}`,
           ];
 
           const defaultGamification = {
@@ -183,12 +165,14 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             ['quantara_bandit_state', JSON.stringify(createInitialBanditState())],
             ['@quantara_bandit_state', JSON.stringify(createInitialBanditState())],
             ['@quantara_module_progress', JSON.stringify({})],
+            [`@quantara_module_progress:${userId || 'guest'}`, JSON.stringify({})],
             ['@quantara_wrong_answer_registry', JSON.stringify([])],
             ['@quantara_skill_accuracy', JSON.stringify(defaultSkillAccuracy)],
             ['@quantara/badges', JSON.stringify([])],
             ['@quantara/badge_stats', JSON.stringify(defaultBadgeStats)],
             ['@quantara_notification_settings', JSON.stringify({})],
             ['quantara_gamification_state', JSON.stringify(defaultGamification)],
+            [`quantara_gamification_state:${userId || 'guest'}`, JSON.stringify(defaultGamification)],
             ['quantara_skill_profile', JSON.stringify(defaultSkillProfile)],
             ['quantara_completed_lessons', JSON.stringify([])],
             ['quantara_lesson_attempts', JSON.stringify([])],
@@ -196,6 +180,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             ['quantara_baseline_assessments', JSON.stringify([])],
             ['quantara_achievements', JSON.stringify([])],
             ['quantara_stats', JSON.stringify(defaultAchievementStats)],
+            [`quantara_course_certificates:${userId || 'guest'}`, JSON.stringify([])],
           ]);
           await AsyncStorage.multiRemove(['user_profile', 'user_financial', ...globalKeys]);
 
@@ -204,7 +189,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             console.log('[Reset] Remote reset was partial or unavailable; local reset completed.');
           }
 
-          await setMode('adaptive');
           setProfile({
             name: user?.email?.split('@')[0] || 'User',
             avatar: 0,
@@ -222,7 +206,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
           clearRegistry();
           await resetSkillAccuracy();
-          await Promise.all([refreshData(), reloadGamification(), reloadModuleProgress()]);
+          await Promise.all([refreshData(), reloadGamification(), reloadModuleProgress(), reloadCertificates()]);
           showAlert('Reset complete', 'Your account data has been reset for a fresh demo state.');
         } catch (error) {
           console.error('Failed to reset account data:', error);
@@ -270,57 +254,63 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       <Spacer height={Spacing.xl} />
 
       {/* ================================================================== */}
-      {/* ACHIEVEMENTS / BADGES */}
+      {/* CERTIFICATES */}
       {/* ================================================================== */}
       <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <View style={styles.cardHeader}>
-          <ThemedText style={styles.cardTitle}>Achievements</ThemedText>
+          <ThemedText style={styles.cardTitle}>Certificates</ThemedText>
           <ThemedText style={[styles.badgeCount, { color: theme.primary }]}>
-            {unlockedBadges.length}/{allBadges.length}
+            {unlockedCourseIds.length}/{courses.length}
           </ThemedText>
         </View>
 
         <Spacer height={Spacing.lg} />
 
-        <View style={styles.badgeGrid}>
-          {allBadges.slice(0, 8).map((badge: Badge) => {
-            const isUnlocked = isBadgeUnlocked(badge.id);
+        <View style={styles.certificateGrid}>
+          {courses.map((course) => {
+            const isUnlocked = isCertificateUnlocked(course.id);
             return (
               <View 
-                key={badge.id} 
+                key={course.id} 
                 style={[
-                  styles.badgeItem,
-                  { backgroundColor: isUnlocked ? theme.primary + '15' : theme.border + '40' }
+                  styles.certificateItem,
+                  { borderColor: theme.border, backgroundColor: isUnlocked ? course.color + '15' : theme.border + '25' }
                 ]}
               >
-                <Feather 
-                  name={badge.icon as any} 
-                  size={24} 
-                  color={isUnlocked ? theme.primary : theme.textSecondary + '60'} 
-                />
+                <View
+                  style={[
+                    styles.certificateIconWrap,
+                    { backgroundColor: isUnlocked ? course.color + '25' : theme.border + '55' },
+                  ]}
+                >
+                  <Feather 
+                    name={course.icon as any} 
+                    size={20} 
+                    color={isUnlocked ? course.color : theme.textSecondary + '80'} 
+                  />
+                </View>
                 <Spacer height={Spacing.xs} />
                 <ThemedText 
                   style={[
-                    styles.badgeName, 
+                    styles.certificateName, 
                     { color: isUnlocked ? theme.text : theme.textSecondary + '80' }
                   ]}
                   numberOfLines={1}
                 >
-                  {badge.name}
+                  {course.title}
+                </ThemedText>
+                <ThemedText
+                  style={[
+                    styles.certificateStatus,
+                    { color: isUnlocked ? course.color : theme.textSecondary + '90' },
+                  ]}
+                >
+                  {isUnlocked ? 'Earned' : 'Locked'}
                 </ThemedText>
               </View>
             );
           })}
         </View>
-
-        {allBadges.length > 8 ? (
-          <>
-            <Spacer height={Spacing.md} />
-            <ThemedText style={[styles.moreBadges, { color: theme.textSecondary }]}>
-              +{allBadges.length - 8} more badges to unlock
-            </ThemedText>
-          </>
-        ) : null}
       </ThemedView>
 
       <Spacer height={Spacing.lg} />
@@ -476,62 +466,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           </ThemedText>
         </ThemedView>
       </Pressable>
-
-      <Spacer height={Spacing.lg} />
-
-      {/* ================================================================== */}
-      {/* LEARNING MODE */}
-      {/* ================================================================== */}
-      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={styles.cardHeader}>
-          <ThemedText style={styles.cardTitle}>Learning Mode</ThemedText>
-          <ThemedText style={[styles.modeHint, { color: theme.textSecondary }]}>
-            For benchmarking
-          </ThemedText>
-        </View>
-
-        <Spacer height={Spacing.md} />
-
-        <View style={[styles.modeToggle, { backgroundColor: theme.backgroundSecondary }]}>
-          <Pressable
-            onPress={() => handleModeChange('adaptive')}
-            style={[
-              styles.modeButton,
-              mode === 'adaptive' && { backgroundColor: theme.primary },
-            ]}
-          >
-            <ThemedText
-              style={[
-                styles.modeButtonText,
-                { color: mode === 'adaptive' ? '#FFFFFF' : theme.text },
-              ]}
-            >
-              Adaptive
-            </ThemedText>
-          </Pressable>
-          <Pressable
-            onPress={() => handleModeChange('static')}
-            style={[
-              styles.modeButton,
-              mode === 'static' && { backgroundColor: theme.primary },
-            ]}
-          >
-            <ThemedText
-              style={[
-                styles.modeButtonText,
-                { color: mode === 'static' ? '#FFFFFF' : theme.text },
-              ]}
-            >
-              Static
-            </ThemedText>
-          </Pressable>
-        </View>
-
-        <Spacer height={Spacing.sm} />
-        <ThemedText style={[styles.tapToEdit, { color: theme.textSecondary }]}>
-          Adaptive uses personalization and AI. Static uses fixed flow.
-        </ThemedText>
-      </ThemedView>
 
       <Spacer height={Spacing.lg} />
 
@@ -798,45 +732,36 @@ const styles = StyleSheet.create({
     ...Typography.headline,
     fontWeight: '600',
   },
-  badgeGrid: {
+  certificateGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     gap: Spacing.sm,
   },
-  badgeItem: {
-    width: '22%',
-    aspectRatio: 1,
+  certificateItem: {
+    flex: 1,
     borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: Spacing.xs,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xs,
+    borderWidth: 1,
   },
-  badgeName: {
+  certificateIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  certificateName: {
     ...Typography.caption,
     textAlign: 'center',
-    fontSize: 10,
-  },
-  modeHint: {
-    ...Typography.caption,
-  },
-  modeToggle: {
-    borderRadius: BorderRadius.sm,
-    padding: Spacing.xs,
-    flexDirection: 'row',
-    gap: Spacing.xs,
-  },
-  modeButton: {
-    flex: 1,
-    borderRadius: BorderRadius.sm,
-    paddingVertical: Spacing.sm,
-    alignItems: 'center',
-  },
-  modeButtonText: {
-    ...Typography.subhead,
+    fontSize: 11,
     fontWeight: '600',
   },
-  moreBadges: {
-    ...Typography.footnote,
+  certificateStatus: {
+    ...Typography.caption,
     textAlign: 'center',
+    marginTop: 2,
   },
 });

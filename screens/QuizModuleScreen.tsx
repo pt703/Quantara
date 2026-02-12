@@ -57,11 +57,12 @@ import { useGamification } from '@/hooks/useGamification';
 import { useWrongAnswerRegistry } from '@/hooks/useWrongAnswerRegistry';
 import { useSkillAccuracy } from '@/hooks/useSkillAccuracy';
 import { useAdaptiveLearning } from '@/hooks/useAdaptiveLearning';
+import { useCourseCertificates } from '@/hooks/useCourseCertificates';
 import { Spacing, BorderRadius, Typography } from '@/constants/theme';
 import { QuizModule, Question, ConceptVariant, AdaptiveQuizState, ConceptResult, SkillDomain } from '../types';
 import { LearnStackParamList } from '../navigation/LearnStackNavigator';
 import { getConceptForQuestion, getVariantQuestions } from '../mock/conceptTags';
-import { getQuestionById, getLessonById } from '../mock/courses';
+import { getQuestionById, getLessonById, getCourseById } from '../mock/courses';
 import { Confetti } from '@/components/Confetti';
 import * as Haptics from '@/utils/haptics';
 import { recordQuizResult as recordQuizResultToBackend, syncLessonProgress } from '@/services/supabaseDataService';
@@ -98,7 +99,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   const insets = useSafeAreaInsets();
   
   const { recordQuizAttempt, getModuleProgress } = useModuleProgress();
-  const { hearts, loseHeart, gainXP, addHearts, streak, recordLessonComplete } = useGamification();
+  const { gainXP, addHearts, streak, updateStreak } = useGamification();
   const { isAdaptive } = useLearningMode();
   
   const existingProgress = getModuleProgress(moduleId);
@@ -112,7 +113,8 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   const isFirstQuizAttempt = sessionStartAttempts === 0;
   const { registerWrongAnswer, markRemediated } = useWrongAnswerRegistry();
   const { recordQuizResult } = useSkillAccuracy();
-  const { recordLessonAttempt } = useAdaptiveLearning(streak);
+  const { recordLessonAttempt, completedLessons } = useAdaptiveLearning(streak);
+  const { unlockCertificate } = useCourseCertificates();
   const { financial } = useUserDataContext();
   
   // Get module data from route params
@@ -160,8 +162,11 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   const [xpEarned, setXpEarned] = useState(0);
   const [heartsLost, setHeartsLost] = useState(0);
   const [heartsEarned, setHeartsEarned] = useState(0);
+  const [attemptHearts, setAttemptHearts] = useState(5);
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalAttempts, setTotalAttempts] = useState(0);
+  const [showCertificateModal, setShowCertificateModal] = useState(false);
+  const [newCertificateCourseId, setNewCertificateCourseId] = useState<string | null>(null);
 
   // AI-generated replacement questions (keyed by queue index)
   const [aiReplacements, setAiReplacements] = useState<Record<number, Question>>({});
@@ -335,6 +340,8 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       });
     }
     
+    let heartsRemainingForLog = attemptHearts;
+
     if (result.isCorrect) {
       // =================================================================
       // CORRECT ANSWER
@@ -396,7 +403,9 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       });
       Haptics.wrongAnswer();
       if (isFirstQuizAttempt) {
-        loseHeart();
+        const nextHearts = Math.max(0, attemptHearts - 1);
+        setAttemptHearts(nextHearts);
+        heartsRemainingForLog = nextHearts;
         setHeartsLost(prev => prev + 1);
       }
       
@@ -664,7 +673,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       penaltyPosition: currentQueueItem.penaltyPosition,
       correct: result.isCorrect,
       responseTimeMs,
-      heartsRemaining: result.isCorrect ? hearts : hearts - 1,
+      heartsRemaining: heartsRemainingForLog,
     });
 
     // Record quiz result to Supabase backend (fire-and-forget)
@@ -681,8 +690,8 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       is_ai_generated: currentQuestion.id.startsWith('ai-'),
     }).catch(() => {});
     
-  }, [currentQuestion, currentQueueItem, module, gainXP, loseHeart, xpScale, lessonId, 
-      registerWrongAnswer, markRemediated, hearts, conceptsInCascade, lessonDomain, financial]);
+  }, [currentQuestion, currentQueueItem, module, gainXP, xpScale, lessonId, 
+      registerWrongAnswer, markRemediated, attemptHearts, conceptsInCascade, lessonDomain, financial, isFirstQuizAttempt, isAdaptive]);
 
   // ==========================================================================
   // HANDLE CONTINUE - Move to next question or complete quiz
@@ -693,8 +702,34 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   // - Legacy mode: All questions answered correctly at least once
   //
   
+  const maybeUnlockCourseCertificate = useCallback(async () => {
+    if (!courseId) return;
+    const course = getCourseById(courseId);
+    if (!course) return;
+
+    const completedSet = new Set(completedLessons);
+    completedSet.add(lessonId);
+    const isCourseComplete = course.lessons.every(lesson => completedSet.has(lesson.id));
+    if (!isCourseComplete) return;
+
+    const unlockedNow = await unlockCertificate(courseId);
+    if (unlockedNow) {
+      setNewCertificateCourseId(courseId);
+      setShowCertificateModal(true);
+    }
+  }, [completedLessons, courseId, lessonId, unlockCertificate]);
+
   const handleContinue = useCallback(() => {
     setIsAnswered(false);
+
+    const getHeartsRewardFromScore = (score: number): number => {
+      if (score >= 100) return 5;
+      if (score >= 80) return 4;
+      if (score >= 70) return 3;
+      if (score >= 50) return 2;
+      if (score >= 30) return 1;
+      return 0;
+    };
     
     // Check if all concepts are mastered
     const allConceptsMastered = !isAdaptive ? true : module?.conceptVariants 
@@ -715,15 +750,15 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       recordLessonAttempt(lessonId, accuracy, totalAttempts * 30, true, false);
       
       // Rewards are only granted on the first quiz attempt for this module.
+      const earned = isFirstQuizAttempt ? getHeartsRewardFromScore(score) : 0;
       if (isFirstQuizAttempt) {
-        addHearts(5);
-        setHeartsEarned(5);
-        
-        const isPerfect = score === 100;
-        recordLessonComplete(isPerfect);
-      } else {
-        setHeartsEarned(0);
+        if (earned > 0) {
+          addHearts(earned);
+        }
+        updateStreak();
+        void maybeUnlockCourseCertificate();
       }
+      setHeartsEarned(earned);
       
       // Record skill accuracy for the lesson domain
       if (lessonDomain) {
@@ -732,7 +767,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       
       // Haptic celebration!
       Haptics.quizComplete();
-      if (isFirstQuizAttempt) {
+      if (isFirstQuizAttempt && earned > 0) {
         Haptics.heartsEarned();
       }
       
@@ -742,7 +777,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         totalQuestions: totalAttempts,
         accuracy: score,
         conceptResults: Array.from(conceptResults.entries()),
-        heartsEarned: isFirstQuizAttempt ? 5 : 0,
+        heartsEarned: earned,
         isReview: !isFirstQuizAttempt,
       });
 
@@ -769,13 +804,15 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       recordLessonAttempt(lessonId, accuracy, totalAttempts * 30, true, false);
       
       // Rewards are only granted on the first quiz attempt for this module.
+      const earned = isFirstQuizAttempt ? getHeartsRewardFromScore(score) : 0;
       if (isFirstQuizAttempt) {
-        addHearts(5);
-        setHeartsEarned(5);
-        recordLessonComplete(score === 100);
-      } else {
-        setHeartsEarned(0);
+        if (earned > 0) {
+          addHearts(earned);
+        }
+        updateStreak();
+        void maybeUnlockCourseCertificate();
       }
+      setHeartsEarned(earned);
       
       // Record skill accuracy
       if (lessonDomain) {
@@ -784,7 +821,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       
       // Haptic celebration!
       Haptics.quizComplete();
-      if (isFirstQuizAttempt) {
+      if (isFirstQuizAttempt && earned > 0) {
         Haptics.heartsEarned();
       }
 
@@ -805,11 +842,18 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       setCurrentIndex(prev => prev + 1);
     }
   }, [currentIndex, questionQueue, module, masteredConcepts, totalCorrect, totalAttempts, 
-      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult, recordLessonComplete, xpEarned, isFirstQuizAttempt, isAdaptive]);
+      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult, xpEarned, isFirstQuizAttempt, isAdaptive, updateStreak, maybeUnlockCourseCertificate]);
 
   // Handle completion dismiss
   const handleCompletionClose = useCallback(() => {
     setShowCompletion(false);
+    if (showCertificateModal) return;
+    navigation.goBack();
+  }, [navigation, showCertificateModal]);
+
+  const handleCertificateClose = useCallback(() => {
+    setShowCertificateModal(false);
+    setNewCertificateCourseId(null);
     navigation.goBack();
   }, [navigation]);
 
@@ -847,7 +891,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         {/* Hearts display */}
         <View style={styles.heartsContainer}>
           <Feather name="heart" size={20} color="#EF4444" />
-          <ThemedText style={styles.heartsText}>{hearts}</ThemedText>
+          <ThemedText style={styles.heartsText}>{attemptHearts}</ThemedText>
         </View>
       </View>
 
@@ -1128,6 +1172,47 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
           </View>
         </View>
       </Modal>
+
+      {/* ================================================================== */}
+      {/* COURSE CERTIFICATE MODAL */}
+      {/* ================================================================== */}
+      <Modal
+        visible={showCertificateModal}
+        animationType="fade"
+        transparent={true}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.certificateModal, { backgroundColor: theme.card }]}>
+            {(() => {
+              const course = newCertificateCourseId ? getCourseById(newCertificateCourseId) : undefined;
+              if (!course) return null;
+              return (
+                <>
+                  <View style={[styles.certificateIconBadge, { backgroundColor: course.color + '20' }]}>
+                    <Feather name={course.icon as any} size={48} color={course.color} />
+                  </View>
+                  <Spacer height={Spacing.lg} />
+                  <ThemedText style={styles.certificateTitle}>Certificate Unlocked!</ThemedText>
+                  <Spacer height={Spacing.sm} />
+                  <ThemedText style={[styles.certificateSubtitle, { color: theme.textSecondary }]}>
+                    Congratulations! You completed
+                  </ThemedText>
+                  <ThemedText style={[styles.certificateCourseName, { color: course.color }]}>
+                    {course.title}
+                  </ThemedText>
+                  <Spacer height={Spacing.lg} />
+                  <Pressable
+                    onPress={handleCertificateClose}
+                    style={[styles.completeButton, { backgroundColor: theme.primary }]}
+                  >
+                    <ThemedText style={styles.completeButtonText}>Awesome</ThemedText>
+                  </Pressable>
+                </>
+              );
+            })()}
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -1272,6 +1357,34 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
     padding: Spacing.xl,
     alignItems: 'center',
+  },
+  certificateModal: {
+    margin: Spacing.lg,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    alignItems: 'center',
+  },
+  certificateIconBadge: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  certificateTitle: {
+    ...Typography.largeTitle,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  certificateSubtitle: {
+    ...Typography.body,
+    textAlign: 'center',
+  },
+  certificateCourseName: {
+    ...Typography.title,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 4,
   },
   celebrationIcon: {
     width: 80,

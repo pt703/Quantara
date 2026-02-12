@@ -8,6 +8,8 @@ import Spacer from '@/components/Spacer';
 import { Spacing, Typography, BorderRadius } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useLearningMode } from '@/hooks/useLearningMode';
+import { showConfirmAlert } from '@/utils/crossPlatformAlert';
 
 interface SettingRowProps {
   icon: keyof typeof Feather.glyphMap;
@@ -45,6 +47,7 @@ function SettingRow({ icon, title, description, value, onValueChange, disabled }
 
 export default function NotificationSettingsScreen() {
   const { theme } = useTheme();
+  const { mode, setMode } = useLearningMode();
   const { 
     permission, 
     settings, 
@@ -68,6 +71,26 @@ export default function NotificationSettingsScreen() {
         console.log('Could not open settings:', error);
       }
     }
+  };
+
+  const handleModeChange = (nextMode: 'adaptive' | 'static') => {
+    if (nextMode === mode) return;
+    console.log('[Learning Mode] Change requested', { from: mode, to: nextMode });
+    showConfirmAlert(
+      `Switch to ${nextMode === 'adaptive' ? 'Adaptive' : 'Static'} mode?`,
+      nextMode === 'adaptive'
+        ? 'Adaptive mode uses personalization and AI for remediation. Continue?'
+        : 'Static mode disables adaptive personalization and AI remediation. Continue?',
+      () => {
+        console.log('[Learning Mode] Change confirmed', { from: mode, to: nextMode });
+        setMode(nextMode);
+      },
+      'Confirm',
+      'Cancel',
+      () => {
+        console.log('[Learning Mode] Change cancelled', { from: mode, to: nextMode });
+      }
+    );
   };
 
   if (isLoading) {
@@ -197,6 +220,52 @@ export default function NotificationSettingsScreen() {
         />
       </ThemedView>
 
+      <Spacer height={Spacing.lg} />
+
+      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.modeHeader}>
+          <ThemedText style={styles.sectionTitle}>Learning Mode</ThemedText>
+          <ThemedText style={[styles.modeHint, { color: theme.textSecondary }]}>
+            Benchmarking
+          </ThemedText>
+        </View>
+        <Spacer height={Spacing.md} />
+        <View style={[styles.modeToggle, { backgroundColor: theme.backgroundSecondary }]}>
+          <Pressable
+            onPress={() => handleModeChange('adaptive')}
+            style={[
+              styles.modeButton,
+              mode === 'adaptive' && { backgroundColor: theme.primary },
+            ]}
+          >
+            <ThemedText
+              style={[
+                styles.modeButtonText,
+                { color: mode === 'adaptive' ? '#FFFFFF' : theme.text },
+              ]}
+            >
+              Adaptive
+            </ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => handleModeChange('static')}
+            style={[
+              styles.modeButton,
+              mode === 'static' && { backgroundColor: theme.primary },
+            ]}
+          >
+            <ThemedText
+              style={[
+                styles.modeButtonText,
+                { color: mode === 'static' ? '#FFFFFF' : theme.text },
+              ]}
+            >
+              Static
+            </ThemedText>
+          </Pressable>
+        </View>
+      </ThemedView>
+
       <Spacer height={Spacing.xl} />
     </ScreenScrollView>
   );
@@ -289,5 +358,29 @@ const styles = StyleSheet.create({
   settingDescription: {
     ...Typography.footnote,
     marginTop: 2,
+  },
+  modeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modeHint: {
+    ...Typography.caption,
+  },
+  modeToggle: {
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.xs,
+    flexDirection: 'row',
+    gap: Spacing.xs,
+  },
+  modeButton: {
+    flex: 1,
+    borderRadius: BorderRadius.sm,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+  },
+  modeButtonText: {
+    ...Typography.subhead,
+    fontWeight: '600',
   },
 });

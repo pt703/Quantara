@@ -1,5 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useCallback } from "react";
 import { View, StyleSheet, Dimensions } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -8,8 +9,8 @@ import { ProgressBar } from "@/components/ProgressBar";
 import Spacer from "@/components/Spacer";
 import { Spacing, Typography, BorderRadius, Colors } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
-import { useLearningProgress } from "@/hooks/useLearningProgress";
-import { useContextualBandit } from "@/hooks/useContextualBandit";
+import { useAdaptiveLearning } from "@/hooks/useAdaptiveLearning";
+import { useSkillAccuracy } from "@/hooks/useSkillAccuracy";
 import useGamification from "@/hooks/useGamification";
 import { courses } from "../mock/courses";
 import { SkillDomain } from "@/types";
@@ -35,56 +36,67 @@ const DOMAIN_ICONS: Record<SkillDomain, keyof typeof Feather.glyphMap> = {
 
 export default function AnalyticsScreen() {
   const { theme } = useTheme();
-  const { getLessonStatus } = useLearningProgress();
-  const { getAllPerformanceStats, getCategoryPerformance } = useContextualBandit();
-  const { streak, longestStreak, activeDays, xp, level } = useGamification();
+  const { streak, longestStreak, activeDays, xp, reload: reloadGamification } = useGamification();
+  const {
+    getCourseProgress,
+    getOverallProgress,
+    lessonAttempts,
+    reload: reloadAdaptive,
+  } = useAdaptiveLearning(streak);
+  const { accuracy: skillAccuracy, reload: reloadSkillAccuracy } = useSkillAccuracy();
+
+  useFocusEffect(
+    useCallback(() => {
+      void Promise.all([reloadGamification(), reloadAdaptive(), reloadSkillAccuracy()]);
+    }, [reloadGamification, reloadAdaptive, reloadSkillAccuracy])
+  );
 
   const stats = useMemo(() => {
-    let completedLessons = 0;
-    let totalLessons = 0;
-    let completedQuizzes = 0;
+    const overallProgress = getOverallProgress();
 
-    courses.forEach((course) => {
-      course.lessons.forEach((lesson) => {
-        totalLessons++;
-        if (getLessonStatus(lesson.id) === "completed") {
-          completedLessons++;
-          const quizModule = lesson.modules.find((m) => m.type === "quiz");
-          if (quizModule) {
-            completedQuizzes++;
-          }
-        }
-      });
+    // Keep only first attempt per lesson so repeated quiz reviews do not
+    // skew benchmark metrics.
+    const firstAttemptsByLesson = new Map<string, number>();
+    lessonAttempts.forEach((attempt) => {
+      if (!firstAttemptsByLesson.has(attempt.lessonId)) {
+        firstAttemptsByLesson.set(attempt.lessonId, attempt.accuracy);
+      }
     });
 
-    const allStats = getAllPerformanceStats();
-    const totalAttempts = allStats.reduce((sum, s) => sum + s.totalAttempts, 0);
-    const totalSuccessRate = allStats.reduce((sum, s) => sum + s.successRate, 0) / allStats.length;
+    const firstAttemptAccuracies = Array.from(firstAttemptsByLesson.values());
+    const successRate =
+      firstAttemptAccuracies.length > 0
+        ? Math.round(
+            (firstAttemptAccuracies.reduce((sum, value) => sum + value, 0) /
+              firstAttemptAccuracies.length) *
+              100
+          )
+        : 0;
 
     return {
-      completedLessons,
-      totalLessons,
-      completedQuizzes,
-      totalAttempts,
-      successRate: Math.round(totalSuccessRate * 100),
+      completedLessons: overallProgress.lessonsCompleted,
+      totalLessons: overallProgress.totalLessons,
+      completedQuizzes: overallProgress.lessonsCompleted,
+      quizAttempts: firstAttemptAccuracies.length,
+      successRate,
     };
-  }, [getLessonStatus, getAllPerformanceStats]);
+  }, [getOverallProgress, lessonAttempts]);
 
   const domainPerformance = useMemo(() => {
     const domains: SkillDomain[] = ["budgeting", "saving", "debt", "credit", "investing"];
     return domains.map((domain) => {
-      const perf = getCategoryPerformance(domain);
+      const data = skillAccuracy[domain];
+      const total = data.total;
+      const avgScore = total > 0 ? Math.round((data.correct / total) * 100) : 0;
       return {
         domain,
         label: DOMAIN_LABELS[domain],
         icon: DOMAIN_ICONS[domain],
-        successRate: Math.round(perf.successRate * 100),
-        attempts: perf.totalAttempts,
-        avgScore: Math.round(perf.averageScore * 100),
-        streak: perf.currentStreak > 0 ? perf.currentStreak : 0,
+        attempts: total,
+        avgScore,
       };
     });
-  }, [getCategoryPerformance]);
+  }, [skillAccuracy]);
 
   const weeklyActivity = useMemo(() => {
     const today = new Date();
@@ -117,8 +129,8 @@ export default function AnalyticsScreen() {
           <View style={[styles.statIcon, { backgroundColor: theme.primary + "15" }]}>
             <Feather name="activity" size={20} color={theme.primary} />
           </View>
-          <ThemedText style={styles.statValue}>{stats.totalAttempts}</ThemedText>
-          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Activities</ThemedText>
+          <ThemedText style={styles.statValue}>{stats.quizAttempts}</ThemedText>
+          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Quiz Attempts</ThemedText>
         </ThemedView>
 
         <ThemedView style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -234,11 +246,6 @@ export default function AnalyticsScreen() {
               <ThemedText style={[styles.domainStat, { color: theme.textSecondary }]}>
                 {item.attempts} attempts
               </ThemedText>
-              {item.streak > 0 ? (
-                <ThemedText style={[styles.domainStat, { color: theme.success }]}>
-                  {item.streak} streak
-                </ThemedText>
-              ) : null}
             </View>
             <Spacer height={Spacing.md} />
           </View>
@@ -268,12 +275,12 @@ export default function AnalyticsScreen() {
         <View style={styles.progressItem}>
           <View style={styles.progressHeader}>
             <Feather name="check-circle" size={18} color={theme.success} />
-            <ThemedText style={styles.progressLabel}>Quizzes Passed</ThemedText>
-            <ThemedText style={[styles.progressValue, { color: theme.success }]}>
-              {stats.completedQuizzes}
-            </ThemedText>
-          </View>
-        </View>
+                <ThemedText style={styles.progressLabel}>Quizzes Passed</ThemedText>
+                <ThemedText style={[styles.progressValue, { color: theme.success }]}>
+                  {stats.completedQuizzes}
+                </ThemedText>
+              </View>
+            </View>
       </ThemedView>
 
       <Spacer height={Spacing.lg} />
@@ -285,10 +292,9 @@ export default function AnalyticsScreen() {
         <Spacer height={Spacing.lg} />
 
         {courses.map((course) => {
-          const completedInCourse = course.lessons.filter(
-            (l) => getLessonStatus(l.id) === "completed"
-          ).length;
-          const progress = (completedInCourse / course.lessons.length) * 100;
+          const courseProgress = getCourseProgress(course.id);
+          const completedInCourse = courseProgress.completed;
+          const progress = courseProgress.percentage;
 
           return (
             <View key={course.id} style={styles.moduleItem}>
