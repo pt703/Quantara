@@ -1,10 +1,10 @@
 import React, { useMemo, useCallback, useEffect } from "react";
-import { View, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, StyleSheet, Pressable, ScrollView } from "react-native";
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat } from 'react-native-reanimated';
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
@@ -16,6 +16,66 @@ import { useModuleProgress } from "@/hooks/useModuleProgress";
 import { useAdaptiveRecommendations, AdaptiveRecommendation } from "@/hooks/useAdaptiveRecommendations";
 import { courses } from "../mock/courses";
 import { Course, LessonModule } from "@/types";
+
+function SkeletonCard() {
+  const { theme } = useTheme();
+  const pulse = useSharedValue(0.4);
+
+  useEffect(() => {
+    pulse.value = withRepeat(withTiming(0.9, { duration: 900 }), -1, true);
+  }, []);
+
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+
+  const bg = theme.backgroundTertiary;
+
+  return (
+    <Animated.View style={[skeletonStyles.card, pulseStyle, { backgroundColor: theme.card }]}>
+      <View style={[skeletonStyles.tag, { backgroundColor: bg }]} />
+      <View style={[skeletonStyles.lineWide, { backgroundColor: bg, marginTop: Spacing.lg }]} />
+      <View style={[skeletonStyles.lineNarrow, { backgroundColor: bg }]} />
+      <View style={[skeletonStyles.lineNarrow, { backgroundColor: bg, width: '50%' }]} />
+      <View style={[skeletonStyles.meta, { backgroundColor: bg }]} />
+      <View style={[skeletonStyles.button, { backgroundColor: bg }]} />
+    </Animated.View>
+  );
+}
+
+const skeletonStyles = StyleSheet.create({
+  card: {
+    width: 260,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+  },
+  tag: {
+    width: 60,
+    height: 22,
+    borderRadius: BorderRadius.full,
+  },
+  lineWide: {
+    height: 14,
+    borderRadius: BorderRadius.xs,
+    width: '85%',
+    marginBottom: Spacing.sm,
+  },
+  lineNarrow: {
+    height: 12,
+    borderRadius: BorderRadius.xs,
+    width: '70%',
+    marginBottom: Spacing.sm,
+  },
+  meta: {
+    height: 12,
+    borderRadius: BorderRadius.xs,
+    width: '40%',
+    marginTop: Spacing.sm,
+  },
+  button: {
+    height: 40,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.md,
+  },
+});
 
 type RootTabParamList = {
   HomeTab: undefined;
@@ -309,9 +369,17 @@ export default function HomeScreen() {
         <Spacer height={Spacing.md} />
 
         {recommendationsLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={theme.primary} />
-          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.recommendationsContainer}
+          >
+            {[1, 2, 3].map((i) => (
+              <View key={i} style={i !== 1 ? { marginLeft: Spacing.md } : undefined}>
+                <SkeletonCard />
+              </View>
+            ))}
+          </ScrollView>
         ) : (
           <ScrollView
             horizontal

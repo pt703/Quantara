@@ -1,8 +1,9 @@
 import React from "react";
+import { View, Text, StyleSheet, Platform } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { Platform, StyleSheet } from "react-native";
+import * as Haptics from "expo-haptics";
 import HomeStackNavigator from "@/navigation/HomeStackNavigator";
 import LearnStackNavigator from "@/navigation/LearnStackNavigator";
 import ChallengesStackNavigator from "@/navigation/ChallengesStackNavigator";
@@ -20,8 +21,49 @@ export type MainTabParamList = {
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+type TabIconProps = {
+  name: keyof typeof Feather.glyphMap;
+  label: string;
+  color: string;
+  focused: boolean;
+  size: number;
+  primaryColor: string;
+};
+
+function TabIcon({ name, label, color, focused, size, primaryColor }: TabIconProps) {
+  return (
+    <View style={styles.tabItem}>
+      <View style={[styles.tabIconBg, focused && { backgroundColor: primaryColor + '18' }]}>
+        <Feather name={name} size={size} color={color} />
+      </View>
+      <Text style={[styles.tabLabel, { color, fontWeight: focused ? '700' : '500' }]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 export default function MainTabNavigator() {
   const { theme, isDark } = useTheme();
+
+  const makeTabOptions = (label: string, iconName: keyof typeof Feather.glyphMap) => ({
+    tabBarShowLabel: false,
+    tabBarIcon: ({ color, focused, size }: { color: string; focused: boolean; size: number }) => (
+      <TabIcon
+        name={iconName}
+        label={label}
+        color={color}
+        focused={focused}
+        size={size}
+        primaryColor={theme.primary}
+      />
+    ),
+    listeners: {
+      tabPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      },
+    },
+  });
 
   return (
     <Tab.Navigator
@@ -37,6 +79,7 @@ export default function MainTabNavigator() {
           }),
           borderTopWidth: 0,
           elevation: 0,
+          height: 72,
         },
         tabBarBackground: () =>
           Platform.OS === "ios" ? (
@@ -52,53 +95,48 @@ export default function MainTabNavigator() {
       <Tab.Screen
         name="HomeTab"
         component={HomeStackNavigator}
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={size} color={color} />
-          ),
-        }}
+        options={makeTabOptions("Home", "home")}
       />
       <Tab.Screen
         name="LearnTab"
         component={LearnStackNavigator}
-        options={{
-          title: "Learn",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="book-open" size={size} color={color} />
-          ),
-        }}
+        options={makeTabOptions("Learn", "book-open")}
       />
       <Tab.Screen
         name="ChallengesTab"
         component={ChallengesStackNavigator}
-        options={{
-          title: "Challenges",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="target" size={size} color={color} />
-          ),
-        }}
+        options={makeTabOptions("Challenges", "target")}
       />
       <Tab.Screen
         name="SocialTab"
         component={SocialStackNavigator}
-        options={{
-          title: "Social",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="users" size={size} color={color} />
-          ),
-        }}
+        options={makeTabOptions("Social", "users")}
       />
       <Tab.Screen
         name="ProfileTab"
         component={ProfileStackNavigator}
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="user" size={size} color={color} />
-          ),
-        }}
+        options={makeTabOptions("Profile", "user")}
       />
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  tabItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    marginTop: 8,
+  },
+  tabIconBg: {
+    width: 44,
+    height: 32,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  tabLabel: {
+    fontSize: 10,
+    letterSpacing: 0.1,
+  },
+});

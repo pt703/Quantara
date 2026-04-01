@@ -1,8 +1,15 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, StyleSheet, Image, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+} from 'react-native-reanimated';
 import { ThemedText } from '@/components/ThemedText';
 import { useTheme } from '@/hooks/useTheme';
 import { Spacing, Typography, BorderRadius } from '@/constants/theme';
@@ -13,15 +20,28 @@ interface FeatureItemProps {
   iconBackground: string;
   title: string;
   description: string;
+  delay: number;
 }
 
-function FeatureItem({ icon, iconColor, iconBackground, title, description }: FeatureItemProps) {
+function FeatureItem({ icon, iconColor, iconBackground, title, description, delay }: FeatureItemProps) {
   const { theme } = useTheme();
-  
+  const opacity = useSharedValue(0);
+  const translateX = useSharedValue(-16);
+
+  useEffect(() => {
+    opacity.value = withDelay(delay, withTiming(1, { duration: 500 }));
+    translateX.value = withDelay(delay, withTiming(0, { duration: 500 }));
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateX: translateX.value }],
+  }));
+
   return (
-    <View style={styles.featureItem}>
+    <Animated.View style={[styles.featureItem, animStyle]}>
       <View style={[styles.featureIconContainer, { backgroundColor: iconBackground }]}>
-        <Feather name={icon} size={20} color={iconColor} />
+        <Feather name={icon} size={22} color={iconColor} />
       </View>
       <View style={styles.featureTextContainer}>
         <ThemedText style={styles.featureTitle}>{title}</ThemedText>
@@ -29,24 +49,48 @@ function FeatureItem({ icon, iconColor, iconBackground, title, description }: Fe
           {description}
         </ThemedText>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
 export default function WelcomeScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
-  const handleGetStarted = () => {
-    navigation.navigate('SignUp' as never);
-  };
+  // Staggered entrance animations
+  const logoOpacity = useSharedValue(0);
+  const logoSlide = useSharedValue(24);
+  const titleOpacity = useSharedValue(0);
+  const titleSlide = useSharedValue(16);
+  const buttonsOpacity = useSharedValue(0);
+  const buttonsSlide = useSharedValue(16);
 
-  const handleLogIn = () => {
-    navigation.navigate('Login' as never);
-  };
+  useEffect(() => {
+    logoOpacity.value = withDelay(0, withTiming(1, { duration: 600 }));
+    logoSlide.value = withDelay(0, withTiming(0, { duration: 600 }));
+    titleOpacity.value = withDelay(200, withTiming(1, { duration: 500 }));
+    titleSlide.value = withDelay(200, withTiming(0, { duration: 500 }));
+    buttonsOpacity.value = withDelay(600, withTiming(1, { duration: 500 }));
+    buttonsSlide.value = withDelay(600, withTiming(0, { duration: 500 }));
+  }, []);
 
-  const features: FeatureItemProps[] = [
+  const logoAnimStyle = useAnimatedStyle(() => ({
+    opacity: logoOpacity.value,
+    transform: [{ translateY: logoSlide.value }],
+  }));
+
+  const titleAnimStyle = useAnimatedStyle(() => ({
+    opacity: titleOpacity.value,
+    transform: [{ translateY: titleSlide.value }],
+  }));
+
+  const buttonsAnimStyle = useAnimatedStyle(() => ({
+    opacity: buttonsOpacity.value,
+    transform: [{ translateY: buttonsSlide.value }],
+  }));
+
+  const features: Omit<FeatureItemProps, 'delay'>[] = [
     {
       icon: 'target',
       iconColor: '#0891B2',
@@ -71,17 +115,15 @@ export default function WelcomeScreen() {
   ];
 
   return (
-    <View 
-      style={[
-        styles.container, 
-        { 
-          backgroundColor: theme.background,
-          paddingTop: insets.top,
-          paddingBottom: insets.bottom,
-        }
-      ]}
+    <LinearGradient
+      colors={isDark
+        ? ['#1E3A5F', '#1A2942', '#111827']
+        : ['#DBEAFE', '#EFF6FF', '#FFFFFF']}
+      locations={[0, 0.4, 1]}
+      style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
     >
-      <View style={styles.headerSection}>
+      {/* Logo + Title */}
+      <Animated.View style={[styles.headerSection, logoAnimStyle]}>
         <View style={styles.logoContainer}>
           <Image
             source={require('../assets/images/quantara-logo.png')}
@@ -89,49 +131,56 @@ export default function WelcomeScreen() {
             resizeMode="contain"
           />
         </View>
+      </Animated.View>
 
+      <Animated.View style={[styles.titleSection, titleAnimStyle]}>
         <ThemedText style={styles.title}>Quantara</ThemedText>
         <ThemedText style={[styles.tagline, { color: theme.textSecondary }]}>
           Your path to financial confidence starts here
         </ThemedText>
-      </View>
+      </Animated.View>
 
+      {/* Features */}
       <View style={styles.featuresSection}>
         {features.map((feature, index) => (
-          <FeatureItem key={index} {...feature} />
+          <FeatureItem key={index} {...feature} delay={350 + index * 100} />
         ))}
       </View>
 
-      <View style={styles.buttonSection}>
+      {/* Buttons */}
+      <Animated.View style={[styles.buttonSection, buttonsAnimStyle]}>
         <Pressable
-          style={({ pressed }) => [
-            styles.primaryButton,
-            { backgroundColor: theme.primary, opacity: pressed ? 0.85 : 1 },
-          ]}
-          onPress={handleGetStarted}
+          style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+          onPress={() => navigation.navigate('SignUp' as never)}
         >
-          <ThemedText style={[styles.primaryButtonText, { color: theme.buttonText }]}>
-            Get Started
-          </ThemedText>
+          <LinearGradient
+            colors={['#3B82F6', '#1E40AF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.primaryButton}
+          >
+            <ThemedText style={styles.primaryButtonText}>Get Started</ThemedText>
+            <Feather name="arrow-right" size={18} color="#FFFFFF" style={{ marginLeft: Spacing.sm }} />
+          </LinearGradient>
         </Pressable>
 
         <Pressable
           style={({ pressed }) => [
             styles.secondaryButton,
-            { 
-              borderColor: theme.border, 
-              backgroundColor: theme.background,
-              opacity: pressed ? 0.7 : 1 
+            {
+              borderColor: isDark ? 'rgba(255,255,255,0.2)' : theme.border,
+              backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.8)',
+              opacity: pressed ? 0.7 : 1,
             },
           ]}
-          onPress={handleLogIn}
+          onPress={() => navigation.navigate('Login' as never)}
         >
-          <ThemedText style={styles.secondaryButtonText}>
+          <ThemedText style={[styles.secondaryButtonText, { color: theme.text }]}>
             Log In
           </ThemedText>
         </Pressable>
-      </View>
-    </View>
+      </Animated.View>
+    </LinearGradient>
   );
 }
 
@@ -143,11 +192,15 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     alignItems: 'center',
-    paddingTop: 80,
+    paddingTop: 60,
+  },
+  titleSection: {
+    alignItems: 'center',
+    marginTop: -Spacing.lg,
   },
   logoContainer: {
-    width: 130,
-    height: 130,
+    width: 120,
+    height: 120,
     marginBottom: Spacing.lg,
   },
   logo: {
@@ -155,9 +208,9 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   title: {
-    fontSize: 38,
-    fontWeight: '600',
-    letterSpacing: -0.5,
+    fontSize: 40,
+    fontWeight: '800',
+    letterSpacing: -1,
     marginBottom: Spacing.sm,
   },
   tagline: {
@@ -165,31 +218,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     maxWidth: 280,
-    lineHeight: 22,
+    lineHeight: 24,
   },
   featuresSection: {
     gap: Spacing.lg,
+    paddingVertical: Spacing.lg,
   },
   featureItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: Spacing.md,
   },
   featureIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: BorderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
   featureTextContainer: {
     flex: 1,
-    paddingTop: 2,
   },
   featureTitle: {
     ...Typography.headline,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: 2,
   },
   featureDescription: {
@@ -202,18 +255,20 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.lg,
   },
   primaryButton: {
-    height: 52,
+    height: 54,
     borderRadius: BorderRadius.lg,
     justifyContent: 'center',
     alignItems: 'center',
+    flexDirection: 'row',
   },
   primaryButtonText: {
     ...Typography.headline,
     fontSize: 17,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   secondaryButton: {
-    height: 52,
+    height: 54,
     borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
