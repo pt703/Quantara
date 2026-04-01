@@ -20,7 +20,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { ScreenScrollView } from '@/components/ScreenScrollView';
 import { ProgressBar } from '@/components/ProgressBar';
 import Spacer from '@/components/Spacer';
-import { Spacing, Typography, BorderRadius } from '@/constants/theme';
+import { Spacing, Typography, BorderRadius, Shadows } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useGamification } from '@/hooks/useGamification';
 import { useAdaptiveLearning } from '@/hooks/useAdaptiveLearning';
@@ -149,24 +149,34 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
       {/* ================================================================== */}
       {/* GAMIFICATION HEADER */}
       {/* ================================================================== */}
-      <View style={[styles.statsHeader, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      <View style={[styles.statsHeader, Shadows.md, { backgroundColor: theme.card }]}>
         {/* Hearts */}
         <View style={styles.statItem}>
-          <Feather name="heart" size={20} color="#EF4444" />
+          <View style={[styles.statIconBg, { backgroundColor: '#FEE2E2' }]}>
+            <Feather name="heart" size={18} color="#EF4444" />
+          </View>
           <ThemedText style={styles.statValue}>{hearts}</ThemedText>
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Hearts</ThemedText>
         </View>
 
-        {/* Streak - Flame icon (hollow style) */}
+        <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+
+        {/* Streak */}
         <View style={styles.statItem}>
-          <Ionicons name="flame-outline" size={22} color="#F97316" />
+          <View style={[styles.statIconBg, { backgroundColor: '#FFEDD5' }]}>
+            <Ionicons name="flame" size={18} color="#F97316" />
+          </View>
           <ThemedText style={styles.statValue}>{streak}</ThemedText>
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Day Streak</ThemedText>
         </View>
 
-        {/* XP Today - Zap icon (hollow style) */}
+        <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+
+        {/* XP Today */}
         <View style={styles.statItem}>
-          <Feather name="zap" size={20} color="#EAB308" />
+          <View style={[styles.statIconBg, { backgroundColor: '#FEF9C3' }]}>
+            <Feather name="zap" size={18} color="#EAB308" />
+          </View>
           <ThemedText style={styles.statValue}>{todayXP}</ThemedText>
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>XP today</ThemedText>
         </View>
@@ -189,9 +199,10 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
       <Pressable
         style={({ pressed }) => [
           styles.testSkillCard,
-          { 
-            backgroundColor: theme.primary + '15', 
-            borderColor: theme.primary,
+          Shadows.sm,
+          {
+            backgroundColor: theme.primary + '12',
+            borderColor: theme.primary + '40',
             opacity: pressed ? 0.8 : 1,
           },
         ]}
@@ -227,7 +238,7 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
 
       <Spacer height={Spacing.sm} />
 
-      <View style={[styles.skillsCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      <View style={[styles.skillsCard, Shadows.md, { backgroundColor: theme.card }]}>
         <SkillBar domain="budgeting" correct={skillAccuracy.budgeting.correct} total={skillAccuracy.budgeting.total} color={skillColors.budgeting} />
         <Spacer height={Spacing.md} />
         <SkillBar domain="saving" correct={skillAccuracy.saving.correct} total={skillAccuracy.saving.total} color={skillColors.saving} />
@@ -258,7 +269,8 @@ export default function LearnScreen({ navigation }: LearnScreenProps) {
           <Pressable
             style={({ pressed }) => [
               styles.courseCard,
-              { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
+              Shadows.sm,
+              { backgroundColor: theme.card, opacity: pressed ? 0.85 : 1 },
             ]}
             onPress={() => {
               // Check if user has taken the assessment for this course
@@ -320,18 +332,33 @@ const styles = StyleSheet.create({
   statsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    alignItems: 'center',
     marginHorizontal: Spacing.lg,
     marginTop: Spacing.md,
     padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
   },
   statItem: {
     alignItems: 'center',
+    flex: 1,
+  },
+  statIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    opacity: 0.5,
   },
   statValue: {
     ...Typography.headline,
-    marginTop: Spacing.xs,
+    fontSize: 20,
+    fontWeight: '700',
   },
   statLabel: {
     ...Typography.caption,
@@ -386,8 +413,7 @@ const styles = StyleSheet.create({
   skillsCard: {
     marginHorizontal: Spacing.lg,
     padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
   },
   skillBarContainer: {
     marginBottom: Spacing.xs,
@@ -418,8 +444,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: Spacing.lg,
     padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
   },
   courseIcon: {
     width: 56,
@@ -451,8 +476,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: Spacing.lg,
     padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 2,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
   },
   testSkillIcon: {
     width: 48,

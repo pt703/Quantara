@@ -11,11 +11,14 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { BorderRadius, Spacing } from "@/constants/theme";
 
+type ButtonVariant = 'primary' | 'outline' | 'ghost';
+
 interface ButtonProps {
   onPress?: () => void;
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
   disabled?: boolean;
+  variant?: ButtonVariant;
 }
 
 const springConfig: WithSpringConfig = {
@@ -33,6 +36,7 @@ export function Button({
   children,
   style,
   disabled = false,
+  variant = 'primary',
 }: ButtonProps) {
   const { theme } = useTheme();
   const scale = useSharedValue(1);
@@ -43,7 +47,7 @@ export function Button({
 
   const handlePressIn = () => {
     if (!disabled) {
-      scale.value = withSpring(0.98, springConfig);
+      scale.value = withSpring(0.97, springConfig);
     }
   };
 
@@ -53,6 +57,28 @@ export function Button({
     }
   };
 
+  const variantStyle = {
+    primary: {
+      backgroundColor: theme.link,
+      borderWidth: 0,
+    },
+    outline: {
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      borderColor: theme.link,
+    },
+    ghost: {
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+    },
+  }[variant];
+
+  const textColor = {
+    primary: theme.buttonText,
+    outline: theme.link,
+    ghost: theme.link,
+  }[variant];
+
   return (
     <AnimatedPressable
       onPress={disabled ? undefined : onPress}
@@ -61,17 +87,15 @@ export function Button({
       disabled={disabled}
       style={[
         styles.button,
-        {
-          backgroundColor: theme.link,
-          opacity: disabled ? 0.5 : 1,
-        },
+        variantStyle,
+        { opacity: disabled ? 0.5 : 1 },
         style,
         animatedStyle,
       ]}
     >
       <ThemedText
         type="body"
-        style={[styles.buttonText, { color: theme.buttonText }]}
+        style={[styles.buttonText, { color: textColor }]}
       >
         {children}
       </ThemedText>

@@ -1,14 +1,15 @@
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useEffect } from "react";
 import { View, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
-import { ProgressBar } from "@/components/ProgressBar";
 import Spacer from "@/components/Spacer";
-import { Spacing, Typography, BorderRadius } from "@/constants/theme";
+import { Spacing, Typography, BorderRadius, Shadows } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useUserData } from "@/hooks/useUserData";
 import { useModuleProgress } from "@/hooks/useModuleProgress";
@@ -26,10 +27,24 @@ type RootTabParamList = {
 
 export default function HomeScreen() {
   const navigation = useNavigation<NavigationProp<RootTabParamList>>();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { profile, financial } = useUserData();
   const { moduleProgress, getLessonProgress, reload: reloadModuleProgress } = useModuleProgress();
   const { generateRecommendations, isLoading: recommendationsLoading, getAllPerformanceStats } = useAdaptiveRecommendations();
+
+  // Entrance animation
+  const fadeAnim = useSharedValue(0);
+  const slideAnim = useSharedValue(20);
+
+  useEffect(() => {
+    fadeAnim.value = withTiming(1, { duration: 400 });
+    slideAnim.value = withTiming(0, { duration: 400 });
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
+    transform: [{ translateY: slideAnim.value }],
+  }));
 
   useFocusEffect(
     useCallback(() => {
@@ -136,8 +151,6 @@ export default function HomeScreen() {
     return generateRecommendations(5);
   }, [generateRecommendations, recommendationsLoading]);
 
-  const performanceStats = useMemo(() => getAllPerformanceStats(), [getAllPerformanceStats]);
-
   const savingsProgress = (financial.currentSavings / financial.savingsGoal) * 100;
   const activeSubscriptions = financial.subscriptions.filter(s => s.active).length;
 
@@ -151,208 +164,251 @@ export default function HomeScreen() {
 
   return (
     <ScreenScrollView>
-      <Spacer height={Spacing.lg} />
+      <Animated.View style={animatedStyle}>
+        <Spacer height={Spacing.lg} />
 
-      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <ThemedText style={styles.cardTitle}>Financial Snapshot</ThemedText>
-
-        <View style={styles.snapshotGrid}>
-          <View style={styles.snapshotItem}>
-            <ThemedText style={[styles.snapshotLabel, { color: theme.textSecondary }]}>
-              Monthly Income
-            </ThemedText>
-            <ThemedText style={styles.snapshotValue}>
-              £{financial.monthlyIncome.toLocaleString()}
-            </ThemedText>
+        {/* Financial Snapshot */}
+        <ThemedView style={[styles.card, Shadows.md, { backgroundColor: theme.card }]}>
+          <View style={styles.cardHeader}>
+            <ThemedText style={styles.cardTitle}>Financial Snapshot</ThemedText>
+            <View style={[styles.iconBadge, { backgroundColor: theme.primary + '15' }]}>
+              <Feather name="trending-up" size={16} color={theme.primary} />
+            </View>
           </View>
 
-          <View style={styles.snapshotItem}>
-            <ThemedText style={[styles.snapshotLabel, { color: theme.textSecondary }]}>
-              Total Debt
-            </ThemedText>
-            <ThemedText style={styles.snapshotValue}>
-              £{financial.totalDebt.toLocaleString()}
-            </ThemedText>
+          <View style={styles.snapshotGrid}>
+            <View style={[styles.snapshotItem, { backgroundColor: theme.backgroundSecondary, borderRadius: BorderRadius.md }]}>
+              <Feather name="dollar-sign" size={16} color="#10B981" style={styles.snapshotIcon} />
+              <ThemedText style={[styles.snapshotLabel, { color: theme.textSecondary }]}>
+                Monthly Income
+              </ThemedText>
+              <ThemedText style={[styles.snapshotValue, { color: '#10B981' }]}>
+                £{financial.monthlyIncome.toLocaleString()}
+              </ThemedText>
+            </View>
+
+            <View style={[styles.snapshotItem, { backgroundColor: theme.backgroundSecondary, borderRadius: BorderRadius.md }]}>
+              <Feather name="credit-card" size={16} color="#EF4444" style={styles.snapshotIcon} />
+              <ThemedText style={[styles.snapshotLabel, { color: theme.textSecondary }]}>
+                Total Debt
+              </ThemedText>
+              <ThemedText style={[styles.snapshotValue, { color: '#EF4444' }]}>
+                £{financial.totalDebt.toLocaleString()}
+              </ThemedText>
+            </View>
+
+            <View style={[styles.snapshotItem, { backgroundColor: theme.backgroundSecondary, borderRadius: BorderRadius.md }]}>
+              <Feather name="repeat" size={16} color="#F59E0B" style={styles.snapshotIcon} />
+              <ThemedText style={[styles.snapshotLabel, { color: theme.textSecondary }]}>
+                Subscriptions
+              </ThemedText>
+              <ThemedText style={[styles.snapshotValue, { color: '#F59E0B' }]}>
+                {activeSubscriptions}
+              </ThemedText>
+            </View>
+
+            <View style={[styles.snapshotItem, { backgroundColor: theme.backgroundSecondary, borderRadius: BorderRadius.md }]}>
+              <Feather name="target" size={16} color="#8B5CF6" style={styles.snapshotIcon} />
+              <ThemedText style={[styles.snapshotLabel, { color: theme.textSecondary }]}>
+                Savings Goal
+              </ThemedText>
+              <ThemedText style={[styles.snapshotValue, { color: '#8B5CF6' }]}>
+                {Math.round(savingsProgress)}%
+              </ThemedText>
+            </View>
           </View>
 
-          <View style={styles.snapshotItem}>
-            <ThemedText style={[styles.snapshotLabel, { color: theme.textSecondary }]}>
-              Subscriptions
+          <Pressable
+            style={({ pressed }) => [
+              styles.snapshotButton,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+            onPress={() => navigation.navigate('ProfileTab' as never)}
+          >
+            <ThemedText style={[styles.snapshotButtonText, { color: theme.primary }]}>
+              View Details
             </ThemedText>
-            <ThemedText style={styles.snapshotValue}>{activeSubscriptions}</ThemedText>
-          </View>
+            <Feather name="chevron-right" size={20} color={theme.primary} />
+          </Pressable>
+        </ThemedView>
 
-          <View style={styles.snapshotItem}>
-            <ThemedText style={[styles.snapshotLabel, { color: theme.textSecondary }]}>
-              Savings Goal
-            </ThemedText>
-            <ThemedText style={styles.snapshotValue}>{Math.round(savingsProgress)}%</ThemedText>
-          </View>
-        </View>
+        <Spacer height={Spacing.lg} />
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.snapshotButton,
-            { opacity: pressed ? 0.7 : 1 },
-          ]}
-          onPress={() => navigation.navigate('ProfileTab' as never)}
-        >
-          <ThemedText style={[styles.snapshotButtonText, { color: theme.primary }]}>
-            View Details
-          </ThemedText>
-          <Feather name="chevron-right" size={20} color={theme.primary} />
-        </Pressable>
-      </ThemedView>
+        {/* Continue Learning */}
+        {continueLesson ? (
+          <>
+            <LinearGradient
+              colors={isDark ? ['#1E40AF', '#1E3A8A'] : ['#3B82F6', '#1E40AF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.card, styles.gradientCard, Shadows.lg]}
+            >
+              <View style={styles.cardHeader}>
+                <ThemedText style={[styles.cardTitle, { color: '#FFFFFF' }]}>Continue Learning</ThemedText>
+                <View style={styles.moduleTypeBadge}>
+                  <ThemedText style={styles.moduleTypeBadgeText}>
+                    {continueLesson.module.type === 'quiz' ? '🧠 Quiz' : '📖 Reading'}
+                  </ThemedText>
+                </View>
+              </View>
 
-      <Spacer height={Spacing.lg} />
+              <ThemedText style={[styles.lessonTitle, { color: '#FFFFFF' }]}>
+                {continueLesson.course.title}: {continueLesson.lesson.title}
+              </ThemedText>
+              <ThemedText style={[styles.lessonMeta, { color: 'rgba(255,255,255,0.7)' }]}>
+                {continueLesson.module.type === 'quiz'
+                  ? 'Quiz'
+                  : `Reading ${continueLesson.moduleIndex + 1}`} · {continueLesson.lesson.estimatedMinutes} min
+              </ThemedText>
 
-      {continueLesson ? (
-        <>
-          <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <ThemedText style={styles.cardTitle}>Continue Learning</ThemedText>
-            <Spacer height={Spacing.md} />
+              <Spacer height={Spacing.lg} />
 
-            <ThemedText style={styles.lessonTitle}>
-              {continueLesson.course.title}: {continueLesson.lesson.title}
-            </ThemedText>
-            <ThemedText style={[styles.lessonMeta, { color: theme.textSecondary }]}>
-              {continueLesson.module.type === 'quiz'
-                ? 'Quiz'
-                : `Reading ${continueLesson.moduleIndex + 1}`} · {continueLesson.lesson.estimatedMinutes} min
-            </ThemedText>
-            <ThemedText style={[styles.lessonMeta, { color: theme.textSecondary }]}>
-              {continueLesson.completedModules}/{continueLesson.totalModules} modules completed
-            </ThemedText>
+              <View style={styles.progressRow}>
+                <View style={styles.whiteProgressTrack}>
+                  <View
+                    style={[
+                      styles.whiteProgressFill,
+                      { width: `${Math.round(continueLesson.progress * 100)}%` },
+                    ]}
+                  />
+                </View>
+                <ThemedText style={styles.progressLabel}>
+                  {continueLesson.completedModules}/{continueLesson.totalModules}
+                </ThemedText>
+              </View>
 
-            <Spacer height={Spacing.md} />
-            <ProgressBar progress={continueLesson.progress} />
+              <Spacer height={Spacing.lg} />
+
+              <Pressable
+                style={({ pressed }) => [styles.resumeButton, { opacity: pressed ? 0.85 : 1 }]}
+                onPress={() => {
+                  // @ts-ignore - nested navigation typing is complex
+                  navigation.navigate('LearnTab', {
+                    screen: 'CourseDetail',
+                    params: {
+                      courseId: continueLesson.course.id,
+                      resumeLessonId: continueLesson.lesson.id,
+                      resumeModuleId: continueLesson.module.id,
+                    },
+                  });
+                }}
+              >
+                <ThemedText style={styles.resumeButtonText}>Resume</ThemedText>
+                <Feather name="arrow-right" size={18} color="#1E40AF" />
+              </Pressable>
+            </LinearGradient>
 
             <Spacer height={Spacing.lg} />
+          </>
+        ) : null}
 
-            <Pressable
-              style={[styles.primaryButton, { backgroundColor: theme.primary }]}
-              onPress={() => {
-                // Route through CourseDetail first so back stack remains:
-                // Module -> CourseDetail -> Learn.
-                // @ts-ignore - nested navigation typing is complex
-                navigation.navigate('LearnTab', {
-                  screen: 'CourseDetail',
-                  params: {
-                    courseId: continueLesson.course.id,
-                    resumeLessonId: continueLesson.lesson.id,
-                    resumeModuleId: continueLesson.module.id,
-                  },
-                });
-              }}
-            >
-              <ThemedText style={[styles.primaryButtonText, { color: theme.buttonText }]}>
-                Resume
-              </ThemedText>
-            </Pressable>
-          </ThemedView>
-
-          <Spacer height={Spacing.lg} />
-        </>
-      ) : null}
-
-      <ThemedText style={styles.sectionTitle}>Recommended for you</ThemedText>
-      <Spacer height={Spacing.md} />
-
-      {recommendationsLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color={theme.primary} />
+        {/* Recommended for you */}
+        <View style={styles.sectionHeaderRow}>
+          <ThemedText style={styles.sectionTitle}>Recommended for you</ThemedText>
         </View>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.recommendationsContainer}
-        >
-          {adaptiveRecommendations.map((rec, index) => (
-            <Pressable
-              key={rec.id}
-              style={[
-                styles.recommendationCard,
-                { backgroundColor: theme.card, borderColor: theme.border },
-                index !== 0 && styles.recommendationCardSpacing,
-              ]}
-              onPress={() => handleRecommendationPress(rec)}
-            >
-              <View style={styles.tagRow}>
-                <View
-                  style={[
-                    styles.tag,
-                    {
-                      backgroundColor:
-                        rec.type === 'lesson'
-                          ? theme.primary + '20'
-                          : rec.type === 'quiz'
-                          ? theme.success + '20'
-                          : rec.type === 'review'
-                          ? theme.warning + '20'
-                          : theme.primary + '20',
-                    },
-                  ]}
-                >
-                  <ThemedText
+        <Spacer height={Spacing.md} />
+
+        {recommendationsLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={theme.primary} />
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.recommendationsContainer}
+          >
+            {adaptiveRecommendations.map((rec, index) => (
+              <Pressable
+                key={rec.id}
+                style={({ pressed }) => [
+                  styles.recommendationCard,
+                  Shadows.md,
+                  { backgroundColor: theme.card, opacity: pressed ? 0.9 : 1 },
+                  index !== 0 && styles.recommendationCardSpacing,
+                ]}
+                onPress={() => handleRecommendationPress(rec)}
+              >
+                <View style={styles.tagRow}>
+                  <View
                     style={[
-                      styles.tagText,
+                      styles.tag,
                       {
-                        color:
+                        backgroundColor:
                           rec.type === 'lesson'
-                            ? theme.primary
+                            ? theme.primary + '20'
                             : rec.type === 'quiz'
-                            ? theme.success
+                            ? '#10B981' + '20'
                             : rec.type === 'review'
-                            ? theme.warning
-                            : theme.primary,
+                            ? '#F59E0B' + '20'
+                            : theme.primary + '20',
                       },
                     ]}
                   >
-                    {rec.type.charAt(0).toUpperCase() + rec.type.slice(1)}
+                    <ThemedText
+                      style={[
+                        styles.tagText,
+                        {
+                          color:
+                            rec.type === 'lesson'
+                              ? theme.primary
+                              : rec.type === 'quiz'
+                              ? '#10B981'
+                              : rec.type === 'review'
+                              ? '#F59E0B'
+                              : theme.primary,
+                        },
+                      ]}
+                    >
+                      {rec.type.charAt(0).toUpperCase() + rec.type.slice(1)}
+                    </ThemedText>
+                  </View>
+
+                  {rec.isExploration ? (
+                    <View style={[styles.explorationBadge, { backgroundColor: '#F59E0B' + '20' }]}>
+                      <Feather name="compass" size={12} color="#F59E0B" />
+                    </View>
+                  ) : null}
+                </View>
+
+                <Spacer height={Spacing.md} />
+
+                <ThemedText style={styles.recommendationTitle} numberOfLines={2}>
+                  {rec.title}
+                </ThemedText>
+
+                <ThemedText
+                  style={[styles.recommendationDescription, { color: theme.textSecondary }]}
+                  numberOfLines={2}
+                >
+                  {rec.reason}
+                </ThemedText>
+
+                <View style={styles.metaRow}>
+                  <Feather name="clock" size={13} color={theme.textSecondary} />
+                  <ThemedText style={[styles.metaText, { color: theme.textSecondary }]}>
+                    {rec.estimatedMinutes} min
                   </ThemedText>
                 </View>
 
-                {rec.isExploration ? (
-                  <View style={[styles.explorationBadge, { backgroundColor: theme.warning + '20' }]}>
-                    <Feather name="compass" size={12} color={theme.warning} />
-                  </View>
-                ) : null}
-              </View>
+                <Spacer height={Spacing.md} />
 
-              <Spacer height={Spacing.md} />
+                <LinearGradient
+                  colors={[theme.primary, theme.primaryDark ?? '#1E40AF']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.startButton}
+                >
+                  <ThemedText style={styles.startButtonText}>Start</ThemedText>
+                  <Feather name="arrow-right" size={14} color="#FFFFFF" />
+                </LinearGradient>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
 
-              <ThemedText style={styles.recommendationTitle} numberOfLines={2}>
-                {rec.title}
-              </ThemedText>
-
-              <ThemedText
-                style={[styles.recommendationDescription, { color: theme.textSecondary }]}
-                numberOfLines={2}
-              >
-                {rec.reason}
-              </ThemedText>
-
-              <View style={styles.metaRow}>
-                <Feather name="clock" size={14} color={theme.textSecondary} />
-                <ThemedText style={[styles.metaText, { color: theme.textSecondary }]}>
-                  {rec.estimatedMinutes} min
-                </ThemedText>
-              </View>
-
-              <Spacer height={Spacing.md} />
-
-              <View style={[styles.startButton, { borderColor: theme.primary }]}>
-                <ThemedText style={[styles.startButtonText, { color: theme.primary }]}>
-                  Start
-                </ThemedText>
-              </View>
-            </Pressable>
-          ))}
-        </ScrollView>
-      )}
-
-      <Spacer height={Spacing['2xl']} />
+        <Spacer height={Spacing['2xl']} />
+      </Animated.View>
     </ScreenScrollView>
   );
 }
@@ -360,29 +416,59 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   card: {
     marginHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
-    borderWidth: 1,
+  },
+  gradientCard: {
+    // gradient card overrides
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.lg,
   },
   cardTitle: {
     ...Typography.title,
-    marginBottom: Spacing.lg,
+  },
+  iconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  moduleTypeBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+  },
+  moduleTypeBadgeText: {
+    ...Typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   snapshotGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.lg,
+    gap: Spacing.sm,
   },
   snapshotItem: {
     flex: 1,
     minWidth: '45%',
+    padding: Spacing.md,
   },
-  snapshotLabel: {
-    ...Typography.footnote,
+  snapshotIcon: {
     marginBottom: Spacing.xs,
   },
+  snapshotLabel: {
+    ...Typography.caption,
+    marginBottom: 2,
+  },
   snapshotValue: {
-    ...Typography.title,
+    ...Typography.headline,
+    fontWeight: '700',
   },
   snapshotButton: {
     flexDirection: 'row',
@@ -402,27 +488,54 @@ const styles = StyleSheet.create({
     ...Typography.footnote,
     marginTop: Spacing.xs,
   },
-  primaryButton: {
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  whiteProgressTrack: {
+    flex: 1,
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  whiteProgressFill: {
+    height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 3,
+  },
+  progressLabel: {
+    ...Typography.caption,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '600',
+  },
+  resumeButton: {
     height: Spacing.buttonHeight,
+    backgroundColor: '#FFFFFF',
     borderRadius: BorderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
+    flexDirection: 'row',
+    gap: Spacing.sm,
   },
-  primaryButtonText: {
+  resumeButtonText: {
     ...Typography.headline,
+    color: '#1E40AF',
+  },
+  sectionHeaderRow: {
+    marginHorizontal: Spacing.lg,
   },
   sectionTitle: {
     ...Typography.title,
-    marginHorizontal: Spacing.lg,
   },
   recommendationsContainer: {
     paddingHorizontal: Spacing.lg,
   },
   recommendationCard: {
-    width: 280,
-    borderRadius: BorderRadius.md,
+    width: 260,
+    borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
-    borderWidth: 1,
   },
   recommendationCardSpacing: {
     marginLeft: Spacing.md,
@@ -431,11 +544,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.xs,
+    borderRadius: BorderRadius.full,
   },
   tagText: {
     ...Typography.caption,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   recommendationTitle: {
     ...Typography.headline,
@@ -446,13 +559,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   startButton: {
-    borderWidth: 1,
+    height: 40,
     borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: Spacing.xs,
   },
   startButtonText: {
-    ...Typography.headline,
+    ...Typography.footnote,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   loadingContainer: {
     paddingVertical: Spacing.xl,
