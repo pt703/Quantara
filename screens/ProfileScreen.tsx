@@ -15,8 +15,7 @@
 
 import React, { useMemo } from "react";
 import { StyleSheet, Pressable, View } from "react-native";
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { showAlert, showConfirmAlert } from '@/utils/crossPlatformAlert';
+import { showAlert } from '@/utils/crossPlatformAlert';
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from '@expo/vector-icons';
 import { ThemedText } from "@/components/ThemedText";
@@ -24,19 +23,13 @@ import { ThemedView } from "@/components/ThemedView";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
 import { PortfolioPieChart } from "@/components/PortfolioPieChart";
 import Spacer from "@/components/Spacer";
-import { Spacing, Typography, BorderRadius } from "@/constants/theme";
+import { Spacing, Typography, BorderRadius, Shadows } from "@/constants/theme";
+import { ProgressBar } from "@/components/ProgressBar";
 import { useTheme } from "@/hooks/useTheme";
 import { useUserData } from "@/hooks/useUserData";
 import { useAuthContext } from "@/context/AuthContext";
-import { useGamification } from "@/hooks/useGamification";
-import { useModuleProgress } from "@/hooks/useModuleProgress";
-import { useSkillAccuracy } from "@/hooks/useSkillAccuracy";
-import { useWrongAnswerRegistry } from "@/hooks/useWrongAnswerRegistry";
 import { useCourseCertificates } from "@/hooks/useCourseCertificates";
 import { ProfileStackParamList } from "@/navigation/ProfileStackNavigator";
-import { resetUserAccountData } from "@/services/supabaseDataService";
-import { DEFAULT_SKILLS, MAX_HEARTS } from "@/types";
-import { createInitialBanditState } from "@/services/ContextualBandit";
 import { courses } from "@/mock/courses";
 
 // =============================================================================
@@ -53,13 +46,9 @@ type ProfileScreenProps = {
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { theme } = useTheme();
-  const { profile, financial, setProfile, setFinancial, refreshData } = useUserData();
+  const { profile, financial } = useUserData();
   const { signOut, user } = useAuthContext();
-  const { unlockedCourseIds, isCertificateUnlocked, reload: reloadCertificates } = useCourseCertificates();
-  const { reload: reloadGamification } = useGamification();
-  const { reload: reloadModuleProgress } = useModuleProgress();
-  const { resetAll: resetSkillAccuracy } = useSkillAccuracy();
-  const { clearRegistry } = useWrongAnswerRegistry();
+  const { unlockedCourseIds, isCertificateUnlocked } = useCourseCertificates();
   const displayName = useMemo(() => {
     const emailPrefix = user?.email?.split('@')[0]?.trim();
     if (emailPrefix) return emailPrefix;
@@ -74,148 +63,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     if (error) {
       showAlert('Error', 'Failed to sign out. Please try again.');
     }
-  };
-
-  const handleResetAccountData = () => {
-    showConfirmAlert(
-      'Reset all data?',
-      'This will reset your progress, lessons, quiz history, badges, and financial inputs for this account. Continue?',
-      async () => {
-        try {
-          const userId = user?.id || null;
-          const scopedKeys = [
-            `user_profile:${userId || 'guest'}`,
-            `user_financial:${userId || 'guest'}`,
-            `learning_mode:${userId || 'guest'}`,
-            `quantara_gamification_state:${userId || 'guest'}`,
-            `@quantara_module_progress:${userId || 'guest'}`,
-          ];
-          const globalKeys = [
-            'user_profile',
-            'user_financial',
-            'learning_progress',
-            'quantara_bandit_state',
-            '@quantara_bandit_state',
-            '@quantara_module_progress',
-            '@quantara_wrong_answer_registry',
-            '@quantara_skill_accuracy',
-            '@quantara/badges',
-            '@quantara/badge_stats',
-            '@quantara_notification_settings',
-            'quantara_gamification_state',
-            'quantara_skill_profile',
-            'quantara_completed_lessons',
-            'quantara_lesson_attempts',
-            'quantara_assessed_courses',
-            'quantara_baseline_assessments',
-            'quantara_achievements',
-            'quantara_stats',
-            'quantara_course_certificates',
-            `quantara_course_certificates:${userId || 'guest'}`,
-          ];
-
-          const defaultGamification = {
-            hearts: 0,
-            maxHearts: MAX_HEARTS,
-            xp: 0,
-            todayXP: 0,
-            todayXPDate: '',
-            level: 1,
-            streak: 0,
-            longestStreak: 0,
-            lastActiveDate: '',
-            lastActivityTimestamp: '',
-            heartsLastRefilled: new Date().toISOString(),
-            activeDays: [],
-          };
-
-          const defaultSkillAccuracy = {
-            budgeting: { correct: 0, total: 0 },
-            saving: { correct: 0, total: 0 },
-            debt: { correct: 0, total: 0 },
-            investing: { correct: 0, total: 0 },
-            credit: { correct: 0, total: 0 },
-          };
-
-          const defaultSkillProfile = {
-            ...DEFAULT_SKILLS,
-            lastUpdated: new Date().toISOString(),
-          };
-
-          const defaultBadgeStats = {
-            quizCount: 0,
-            lessonCount: 0,
-            perfectQuizCount: 0,
-            challengeCount: 0,
-            totalXp: 0,
-            currentStreak: 0,
-            hasSavingsGoal: false,
-            completedDomains: [],
-          };
-
-          const defaultAchievementStats = {
-            lessonsCompleted: 0,
-            coursesCompleted: 0,
-            perfectScores: 0,
-          };
-
-          await AsyncStorage.multiRemove(scopedKeys);
-          await AsyncStorage.multiSet([
-            ['learning_progress', JSON.stringify({})],
-            ['quantara_bandit_state', JSON.stringify(createInitialBanditState())],
-            ['@quantara_bandit_state', JSON.stringify(createInitialBanditState())],
-            ['@quantara_module_progress', JSON.stringify({})],
-            [`@quantara_module_progress:${userId || 'guest'}`, JSON.stringify({})],
-            ['@quantara_wrong_answer_registry', JSON.stringify([])],
-            ['@quantara_skill_accuracy', JSON.stringify(defaultSkillAccuracy)],
-            ['@quantara/badges', JSON.stringify([])],
-            ['@quantara/badge_stats', JSON.stringify(defaultBadgeStats)],
-            ['@quantara_notification_settings', JSON.stringify({})],
-            ['quantara_gamification_state', JSON.stringify(defaultGamification)],
-            [`quantara_gamification_state:${userId || 'guest'}`, JSON.stringify(defaultGamification)],
-            ['quantara_skill_profile', JSON.stringify(defaultSkillProfile)],
-            ['quantara_completed_lessons', JSON.stringify([])],
-            ['quantara_lesson_attempts', JSON.stringify([])],
-            ['quantara_assessed_courses', JSON.stringify([])],
-            ['quantara_baseline_assessments', JSON.stringify([])],
-            ['quantara_achievements', JSON.stringify([])],
-            ['quantara_stats', JSON.stringify(defaultAchievementStats)],
-            [`quantara_course_certificates:${userId || 'guest'}`, JSON.stringify([])],
-          ]);
-          await AsyncStorage.multiRemove(['user_profile', 'user_financial', ...globalKeys]);
-
-          const remoteResetOk = await resetUserAccountData();
-          if (!remoteResetOk) {
-            console.log('[Reset] Remote reset was partial or unavailable; local reset completed.');
-          }
-
-          setProfile({
-            name: user?.email?.split('@')[0] || 'User',
-            avatar: 0,
-          });
-          setFinancial({
-            monthlyIncome: 0,
-            monthlyExpenses: 0,
-            totalDebt: 0,
-            savingsGoal: 0,
-            currentSavings: 0,
-            subscriptions: [],
-            debtItems: [],
-            portfolioAssets: [],
-          });
-
-          clearRegistry();
-          await resetSkillAccuracy();
-          await Promise.all([refreshData(), reloadGamification(), reloadModuleProgress(), reloadCertificates()]);
-          showAlert('Reset complete', 'Your account data has been reset for a fresh demo state.');
-        } catch (error) {
-          console.error('Failed to reset account data:', error);
-          showAlert('Reset failed', 'Could not reset all data. Please try again.');
-        }
-      },
-      'Confirm',
-      'Cancel'
-    );
   };
 
   // Calculate subscription savings from cancelled subscriptions
@@ -256,7 +103,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       {/* ================================================================== */}
       {/* CERTIFICATES */}
       {/* ================================================================== */}
-      <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      <ThemedView style={[styles.card, Shadows.md, { backgroundColor: theme.card }]}>
         <View style={styles.cardHeader}>
           <ThemedText style={styles.cardTitle}>Certificates</ThemedText>
           <ThemedText style={[styles.badgeCount, { color: theme.primary }]}>
@@ -322,7 +169,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         onPress={() => navigation.navigate('FinancialEdit')}
         style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
       >
-        <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <ThemedView style={[styles.card, Shadows.md, { backgroundColor: theme.card }]}>
           <View style={styles.cardHeader}>
             <ThemedText style={styles.cardTitle}>Financial Overview</ThemedText>
             <Feather name="edit-2" size={18} color={theme.primary} />
@@ -363,13 +210,23 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
           <Spacer height={Spacing.md} />
 
-          <View style={styles.financialRow}>
-            <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
-              Savings Progress
-            </ThemedText>
-            <ThemedText style={styles.financialValue}>
-              £{financial.currentSavings.toLocaleString()} / £
-              {financial.savingsGoal.toLocaleString()}
+          <View>
+            <View style={styles.financialRow}>
+              <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
+                Savings Goal
+              </ThemedText>
+              <ThemedText style={[styles.financialValue, { color: theme.success }]}>
+                {Math.round((financial.currentSavings / financial.savingsGoal) * 100)}%
+              </ThemedText>
+            </View>
+            <Spacer height={Spacing.sm} />
+            <ProgressBar
+              progress={financial.currentSavings / financial.savingsGoal}
+              color={theme.success}
+              height={8}
+            />
+            <ThemedText style={[styles.savingsSubLabel, { color: theme.textSecondary }]}>
+              £{financial.currentSavings.toLocaleString()} of £{financial.savingsGoal.toLocaleString()}
             </ThemedText>
           </View>
 
@@ -390,7 +247,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         onPress={() => navigation.navigate('PortfolioTracker')}
         style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
       >
-        <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <ThemedView style={[styles.card, Shadows.md, { backgroundColor: theme.card }]}>
           <View style={styles.cardHeader}>
             <ThemedText style={styles.cardTitle}>Portfolio</ThemedText>
             <View style={styles.headerRight}>
@@ -424,7 +281,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         onPress={() => navigation.navigate('SubscriptionManager')}
         style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
       >
-        <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <ThemedView style={[styles.card, Shadows.md, { backgroundColor: theme.card }]}>
           <View style={styles.cardHeader}>
             <ThemedText style={styles.cardTitle}>Subscriptions</ThemedText>
             <View style={styles.subscriptionBadge}>
@@ -472,7 +329,8 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       <Pressable
         style={({ pressed }) => [
           styles.coachButton,
-          { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+          Shadows.sm,
+          { backgroundColor: theme.card, opacity: pressed ? 0.85 : 1 },
         ]}
         onPress={() => navigation.navigate('AIFinancialCoach')}
       >
@@ -543,18 +401,9 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             </ThemedText>
           </Pressable>
           <Spacer height={Spacing.md} />
-          <Pressable
-            style={({ pressed }) => [
-              styles.resetButton,
-              { borderColor: theme.warning, opacity: pressed ? 0.7 : 1 },
-            ]}
-            onPress={handleResetAccountData}
-          >
-            <Feather name="refresh-ccw" size={18} color={theme.warning} />
-            <ThemedText style={[styles.resetText, { color: theme.warning }]}>
-              Reset
-            </ThemedText>
-          </Pressable>
+          <ThemedText style={[styles.legalFooter, { color: theme.textSecondary }]}>
+            © Quantara. All rights reserved
+          </ThemedText>
         </View>
       ) : null}
 
@@ -588,9 +437,12 @@ const styles = StyleSheet.create({
   },
   card: {
     marginHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
-    borderWidth: 1,
+  },
+  savingsSubLabel: {
+    ...Typography.caption,
+    marginTop: Spacing.xs,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -667,8 +519,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.md,
     gap: Spacing.md,
@@ -710,19 +561,9 @@ const styles = StyleSheet.create({
     ...Typography.body,
     fontWeight: '600',
   },
-  resetButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1.5,
-    gap: Spacing.sm,
-  },
-  resetText: {
-    ...Typography.body,
-    fontWeight: '600',
+  legalFooter: {
+    ...Typography.caption,
+    textAlign: 'center',
   },
   tapToEdit: {
     ...Typography.caption,
