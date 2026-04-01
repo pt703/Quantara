@@ -216,18 +216,26 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 Savings Goal
               </ThemedText>
               <ThemedText style={[styles.financialValue, { color: theme.success }]}>
-                {Math.round((financial.currentSavings / financial.savingsGoal) * 100)}%
+                {financial.savingsGoal > 0 ? `${Math.round((financial.currentSavings / financial.savingsGoal) * 100)}%` : '—'}
               </ThemedText>
             </View>
             <Spacer height={Spacing.sm} />
-            <ProgressBar
-              progress={financial.currentSavings / financial.savingsGoal}
-              color={theme.success}
-              height={8}
-            />
-            <ThemedText style={[styles.savingsSubLabel, { color: theme.textSecondary }]}>
-              £{financial.currentSavings.toLocaleString()} of £{financial.savingsGoal.toLocaleString()}
-            </ThemedText>
+            {financial.savingsGoal > 0 ? (
+              <>
+                <ProgressBar
+                  progress={financial.currentSavings / financial.savingsGoal}
+                  color={theme.success}
+                  height={8}
+                />
+                <ThemedText style={[styles.savingsSubLabel, { color: theme.textSecondary }]}>
+                  £{financial.currentSavings.toLocaleString()} of £{financial.savingsGoal.toLocaleString()}
+                </ThemedText>
+              </>
+            ) : (
+              <ThemedText style={[styles.savingsSubLabel, { color: theme.textSecondary }]}>
+                Set a savings goal to track your progress
+              </ThemedText>
+            )}
           </View>
 
           <Spacer height={Spacing.md} />

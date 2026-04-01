@@ -211,7 +211,7 @@ export default function HomeScreen() {
     return generateRecommendations(5);
   }, [generateRecommendations, recommendationsLoading]);
 
-  const savingsProgress = (financial.currentSavings / financial.savingsGoal) * 100;
+  const savingsProgress = financial.savingsGoal > 0 ? (financial.currentSavings / financial.savingsGoal) * 100 : 0;
   const activeSubscriptions = financial.subscriptions.filter(s => s.active).length;
 
   const handleRecommendationPress = (rec: AdaptiveRecommendation) => {
@@ -273,7 +273,7 @@ export default function HomeScreen() {
                 Savings Goal
               </ThemedText>
               <ThemedText style={[styles.snapshotValue, { color: '#8B5CF6' }]}>
-                {Math.round(savingsProgress)}%
+                {financial.savingsGoal > 0 ? `${Math.round(savingsProgress)}%` : '—'}
               </ThemedText>
             </View>
           </View>
