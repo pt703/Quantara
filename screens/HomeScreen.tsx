@@ -244,15 +244,15 @@ export default function HomeScreen() {
               style={[styles.card, styles.gradientCard, Shadows.lg]}
             >
               <View style={styles.cardHeader}>
-                <ThemedText style={[styles.cardTitle, { color: '#FFFFFF' }]}>Continue Learning</ThemedText>
-                <View style={styles.moduleTypeBadge}>
-                  <ThemedText style={styles.moduleTypeBadgeText}>
+                <ThemedText style={[styles.cardTitle, { color: '#FFFFFF', flex: 1, fontSize: 20, fontWeight: '800', letterSpacing: 0.3 }]}>Continue Learning</ThemedText>
+                <View style={[styles.moduleTypeBadge, { flexShrink: 0, marginLeft: Spacing.sm }]}>
+                  <ThemedText style={styles.moduleTypeBadgeText} numberOfLines={1}>
                     {continueLesson.module.type === 'quiz' ? '🧠 Quiz' : '📖 Reading'}
                   </ThemedText>
                 </View>
               </View>
 
-              <ThemedText style={[styles.lessonTitle, { color: '#FFFFFF' }]}>
+              <ThemedText style={[styles.lessonTitle, { color: '#FFFFFF', fontWeight: '600' }]}>
                 {continueLesson.course.title}: {continueLesson.lesson.title}
               </ThemedText>
               <ThemedText style={[styles.lessonMeta, { color: 'rgba(255,255,255,0.7)' }]}>
