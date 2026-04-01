@@ -36,7 +36,7 @@ function TabIcon({ name, label, color, focused, size, primaryColor }: TabIconPro
       <View style={[styles.tabIconBg, focused && { backgroundColor: primaryColor + '18' }]}>
         <Feather name={name} size={size} color={color} />
       </View>
-      <Text style={[styles.tabLabel, { color, fontWeight: focused ? '700' : '500' }]}>
+      <Text numberOfLines={1} style={[styles.tabLabel, { color, fontWeight: focused ? '700' : '500' }]}>
         {label}
       </Text>
     </View>
@@ -79,7 +79,9 @@ export default function MainTabNavigator() {
           }),
           borderTopWidth: 0,
           elevation: 0,
-          height: 72,
+          shadowOpacity: 0,
+          shadowRadius: 0,
+          height: 76,
         },
         tabBarBackground: () =>
           Platform.OS === "ios" ? (
@@ -105,7 +107,7 @@ export default function MainTabNavigator() {
       <Tab.Screen
         name="ChallengesTab"
         component={ChallengesStackNavigator}
-        options={makeTabOptions("Challenges", "target")}
+        options={makeTabOptions("Goals", "target")}
       />
       <Tab.Screen
         name="SocialTab"
@@ -138,5 +140,7 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 10,
     letterSpacing: 0.1,
+    maxWidth: 56,
+    textAlign: 'center',
   },
 });
