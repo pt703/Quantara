@@ -83,6 +83,7 @@ type QuizModuleScreenProps = {
 interface QueuedQuestion {
   question: Question;
   isPenalty: boolean;              // Is this part of a penalty cascade?
+  isRetry?: boolean;               // Is this a retry of an original question (non-adaptive mode)?
   conceptId?: string;              // Which concept this question tests
   difficultyTier: 1 | 2 | 3;       // 1=easy, 2=medium, 3=hard
   isInitialHardTest: boolean;      // Is this the first hard test for a concept?
@@ -148,6 +149,11 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   
   // Track concepts currently in penalty cascade (prevents double-injection)
   const [conceptsInCascade, setConceptsInCascade] = useState<Set<string>>(new Set());
+
+  // Non-adaptive retry: questions answered wrong on first pass, re-queued after all originals
+  const [pendingRetries, setPendingRetries] = useState<QueuedQuestion[]>([]);
+  const pendingRetriesRef = useRef<QueuedQuestion[]>([]);
+  const [originalQueueLength, setOriginalQueueLength] = useState(0);
   
   // Detailed results per concept for research logging
   const [conceptResults, setConceptResults] = useState<Map<string, ConceptResult>>(new Map());
@@ -314,6 +320,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
           if (item.conceptId) initialMastery.set(item.conceptId, 50);
         });
         setConceptMasteryScores(initialMastery);
+        setOriginalQueueLength(initialQueue.length);
         setQuestionQueue(initialQueue);
       }
     }
@@ -325,11 +332,32 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   
   // Count of concepts to master (or original question count for legacy mode)
   const totalConceptsToMaster = module?.conceptVariants?.length || module?.questions.length || 0;
-  
+
   // Calculate progress based on concept mastery
-  const progress = totalConceptsToMaster > 0 
-    ? (masteredConcepts.size / totalConceptsToMaster) * 100 
+  const progress = totalConceptsToMaster > 0
+    ? (masteredConcepts.size / totalConceptsToMaster) * 100
     : 0;
+
+  // Dots to display — either from conceptVariants or derived from unique conceptIds on questions
+  const displayConcepts: Array<{ conceptId: string; conceptName: string }> = useMemo(() => {
+    if (module?.conceptVariants && module.conceptVariants.length > 0) {
+      return module.conceptVariants.map(cv => ({ conceptId: cv.conceptId, conceptName: cv.conceptName }));
+    }
+    if (!module?.questions) return [];
+    const seen = new Set<string>();
+    const result: Array<{ conceptId: string; conceptName: string }> = [];
+    for (const q of module.questions) {
+      const cId = (q as any).conceptId as string | undefined;
+      if (cId && !seen.has(cId)) {
+        seen.add(cId);
+        result.push({
+          conceptId: cId,
+          conceptName: cId.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+        });
+      }
+    }
+    return result;
+  }, [module]);
 
   // Reset question timer when moving to new question
   useEffect(() => {
@@ -431,8 +459,14 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         withSpring(1)
       );
       
-      // Check if this is a HARD question (tier 3) - marks concept as mastered
-      if (currentQueueItem.difficultyTier === 3 && conceptId) {
+      // Mark concept as mastered when:
+      // - Adaptive mode: correct answer on tier-3 (hard) question
+      // - Non-adaptive mode: correct on first attempt OR correct on the designated retry (isRetry)
+      //   (AI warmup questions in non-adaptive are isPenalty but NOT isRetry, so they don't count)
+      const countsAsMastery = module?.conceptVariants
+        ? currentQueueItem.difficultyTier === 3
+        : !currentQueueItem.isPenalty || currentQueueItem.isRetry === true;
+      if (countsAsMastery && conceptId) {
         setMasteredConcepts(prev => new Set([...prev, conceptId]));
         
         // Update concept result to show mastery
@@ -779,6 +813,25 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       }
       // Note: Easy/Medium failures in cascade don't inject more questions,
       // user just continues to the next question in the cascade
+
+      // NON-ADAPTIVE MODE: on first-attempt wrong answer, queue this question for retry
+      // after all original questions are done (no immediate cascade)
+      if (!isAdaptive && !currentQueueItem.isPenalty && conceptId) {
+        const retryItem: QueuedQuestion = {
+          question: currentQuestion,
+          isPenalty: true,
+          isRetry: true,
+          conceptId,
+          difficultyTier: currentQueueItem.difficultyTier,
+          isInitialHardTest: false,
+          selectionReason: 'Why this question: retry after first-attempt wrong answer.',
+        };
+        setPendingRetries(prev => {
+          const next = [...prev, retryItem];
+          pendingRetriesRef.current = next;
+          return next;
+        });
+      }
     }
     
     // Log attempt for research (in development, this would be saved to storage)
@@ -851,9 +904,11 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
     };
     
     // Check if all concepts are mastered
-    const allConceptsMastered = !isAdaptive ? true : module?.conceptVariants 
-      ? module.conceptVariants.every(c => masteredConcepts.has(c.conceptId))
-      : masteredConcepts.size >= (module?.questions.length || 0);
+    const allConceptsMastered = !isAdaptive
+      ? displayConcepts.every(c => masteredConcepts.has(c.conceptId))
+      : module?.conceptVariants
+        ? module.conceptVariants.every(c => masteredConcepts.has(c.conceptId))
+        : masteredConcepts.size >= (module?.questions.length || 0);
     
     const atEndOfQueue = currentIndex >= questionQueue.length - 1;
     
@@ -961,11 +1016,78 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       
       setShowCompletion(true);
     } else {
+      // Flush pending retries once user completes the last original question
+      const completingLastOriginal =
+        !isAdaptive &&
+        originalQueueLength > 0 &&
+        currentIndex === originalQueueLength - 1 &&
+        pendingRetriesRef.current.length > 0;
+
+      if (completingLastOriginal) {
+        const retriesToFlush = [...pendingRetriesRef.current];
+        pendingRetriesRef.current = [];
+        setPendingRetries([]);
+
+        setQuestionQueue(prev => {
+          const queueStart = prev.length;
+          const userCtx = financial ? {
+            monthlyIncome: financial.monthlyIncome,
+            monthlyExpenses: financial.monthlyExpenses,
+            savingsGoal: financial.savingsGoal,
+            currentSavings: financial.currentSavings,
+            monthlyDebt: financial.totalDebt,
+          } : undefined;
+          const domain = (lessonDomain || 'budgeting') as any;
+
+          const newItems: QueuedQuestion[] = [];
+          retriesToFlush.forEach((retry, i) => {
+            const warmup1Idx = queueStart + i * 3;
+            const warmup2Idx = warmup1Idx + 1;
+            // 2 AI warmup placeholders (replaced by AI-generated questions when available)
+            newItems.push({
+              question: retry.question,
+              isPenalty: true,
+              isRetry: false,
+              conceptId: retry.conceptId,
+              difficultyTier: 1,
+              isInitialHardTest: false,
+              penaltyPosition: 0,
+              selectionReason: 'Why this question: AI warmup before retry.',
+            });
+            newItems.push({
+              question: retry.question,
+              isPenalty: true,
+              isRetry: false,
+              conceptId: retry.conceptId,
+              difficultyTier: 2,
+              isInitialHardTest: false,
+              penaltyPosition: 1,
+              selectionReason: 'Why this question: AI warmup before retry.',
+            });
+            // The original question as a proper retry
+            newItems.push(retry);
+
+            if (canGenerateAIQuestions()) {
+              const conceptName = retry.question.question.substring(0, 50);
+              generateConceptQuestion(retry.question, retry.conceptId!, conceptName, domain, 'beginner', userCtx)
+                .then(aiQ => { if (aiQ) setAiReplacements(r => ({ ...r, [warmup1Idx]: aiQ })); })
+                .catch(() => {});
+              generateConceptQuestion(retry.question, retry.conceptId!, conceptName, domain, 'intermediate', userCtx)
+                .then(aiQ => { if (aiQ) setAiReplacements(r => ({ ...r, [warmup2Idx]: aiQ })); })
+                .catch(() => {});
+            }
+          });
+
+          return [...prev, ...newItems];
+        });
+      }
+
       // Move to next question in queue
       setCurrentIndex(prev => prev + 1);
     }
-  }, [currentIndex, questionQueue, module, masteredConcepts, totalCorrect, totalAttempts, 
-      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult, xpEarned, isFirstQuizAttempt, isAdaptive, updateStreak, maybeUnlockCourseCertificate]);
+  }, [currentIndex, questionQueue, module, masteredConcepts, totalCorrect, totalAttempts,
+      moduleId, lessonId, recordQuizAttempt, recordLessonAttempt, conceptResults, addHearts, lessonDomain, recordQuizResult, xpEarned, isFirstQuizAttempt, isAdaptive, updateStreak, maybeUnlockCourseCertificate,
+      originalQueueLength, pendingRetries, financial]);
 
   // Handle completion dismiss
   const handleCompletionClose = useCallback(() => {
@@ -1085,14 +1207,12 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         </View>
         
         {/* Concept mastery dots */}
-        {module?.conceptVariants && (
+        {displayConcepts.length > 0 && (
           <View style={styles.conceptDotsRow}>
-            {module.conceptVariants.map((cv, i) => {
+            {displayConcepts.map((cv, i) => {
               const isMastered = masteredConcepts.has(cv.conceptId);
               const isActive = currentQueueItem?.conceptId === cv.conceptId && !isMastered;
-              const shortName = cv.conceptName
-                ? cv.conceptName.split(' ')[0]
-                : `#${i + 1}`;
+              const shortName = String(i + 1);
               return (
                 <View key={cv.conceptId} style={styles.conceptDotItem}>
                   <View
