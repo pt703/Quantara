@@ -87,6 +87,7 @@ interface QueuedQuestion {
   difficultyTier: 1 | 2 | 3;       // 1=easy, 2=medium, 3=hard
   isInitialHardTest: boolean;      // Is this the first hard test for a concept?
   penaltyPosition?: number;        // Position in cascade (0=easy, 1=medium, 2=hard)
+  selectionReason?: string;        // Why this question/tier was selected
 }
 
 // =============================================================================
@@ -143,6 +144,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   // Track concept mastery - user must correctly answer HARD for each concept
   // Key: conceptId, Value: whether the HARD question was answered correctly
   const [masteredConcepts, setMasteredConcepts] = useState<Set<string>>(new Set());
+  const [conceptMasteryScores, setConceptMasteryScores] = useState<Map<string, number>>(new Map());
   
   // Track concepts currently in penalty cascade (prevents double-injection)
   const [conceptsInCascade, setConceptsInCascade] = useState<Set<string>>(new Set());
@@ -166,10 +168,51 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalAttempts, setTotalAttempts] = useState(0);
   const [showCertificateModal, setShowCertificateModal] = useState(false);
+  const [pendingCertificateCourseId, setPendingCertificateCourseId] = useState<string | null>(null);
   const [newCertificateCourseId, setNewCertificateCourseId] = useState<string | null>(null);
 
   // AI-generated replacement questions (keyed by queue index)
   const [aiReplacements, setAiReplacements] = useState<Record<number, Question>>({});
+
+  const targetTierFromScore = useCallback((score: number, userStreak: number): 1 | 2 | 3 => {
+    const streakBonus = userStreak >= 7 ? 12 : userStreak >= 3 ? 6 : 0;
+    const adjusted = score + streakBonus;
+    if (adjusted >= 70) return 3;
+    if (adjusted >= 45) return 2;
+    return 1;
+  }, []);
+
+  const reasonFromTier = useCallback((tier: 1 | 2 | 3, score: number, userStreak: number) => {
+    if (tier === 3) {
+      return userStreak >= 3
+        ? `Why this question: strong recent performance (streak ${userStreak}) and high concept score.`
+        : 'Why this question: concept score indicates readiness for hard difficulty.';
+    }
+    if (tier === 2) {
+      return 'Why this question: medium check selected to validate developing understanding.';
+    }
+    return 'Why this question: foundational reinforcement selected after lower mastery signals.';
+  }, []);
+
+  const updateConceptMastery = useCallback(
+    (conceptId: string | undefined, isCorrect: boolean, difficultyTier: 1 | 2 | 3, responseTimeMs: number) => {
+      if (!conceptId) return;
+      setConceptMasteryScores(prev => {
+        const next = new Map(prev);
+        const current = next.get(conceptId) ?? 50;
+        const tierWeight = difficultyTier === 3 ? 14 : difficultyTier === 2 ? 10 : 7;
+        const correctnessDelta = isCorrect ? tierWeight : -12;
+        // Fast-but-correct gets only a small bonus to avoid overreacting to lucky guesses.
+        const speedDelta = isCorrect && responseTimeMs > 2000 && responseTimeMs < 18000 ? 2 : 0;
+        // Penalize repeated misses slightly harder to keep remediation focused.
+        const missPenalty = !isCorrect && current < 40 ? -3 : 0;
+        const updated = Math.max(0, Math.min(100, current + correctnessDelta + speedDelta + missPenalty));
+        next.set(conceptId, updated);
+        return next;
+      });
+    },
+    []
+  );
   
   // Animation values
   const progressWidth = useSharedValue(0);
@@ -198,16 +241,24 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
         const initialQueue: QueuedQuestion[] = [];
         
         module.conceptVariants.forEach(concept => {
-          // Find the HARD question for this concept
-          const hardQuestion = module.questions.find(q => q.id === concept.hardQuestionId);
-          
-          if (hardQuestion) {
+          const baseScore = conceptMasteryScores.get(concept.conceptId) ?? 50;
+          const selectedTier = targetTierFromScore(baseScore, streak);
+          const selectedQuestionId =
+            selectedTier === 3
+              ? concept.hardQuestionId
+              : selectedTier === 2
+                ? concept.mediumQuestionId
+                : concept.easyQuestionId;
+          const selectedQuestion = module.questions.find(q => q.id === selectedQuestionId);
+
+          if (selectedQuestion) {
             initialQueue.push({
-              question: hardQuestion,
+              question: selectedQuestion,
               isPenalty: false,
               conceptId: concept.conceptId,
-              difficultyTier: 3,  // Hard
-              isInitialHardTest: true,
+              difficultyTier: selectedTier,
+              isInitialHardTest: selectedTier === 3,
+              selectionReason: reasonFromTier(selectedTier, baseScore, streak),
             });
           }
         });
@@ -226,6 +277,11 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
             mastered: false,
           });
         });
+        const initialMastery = new Map<string, number>();
+        module.conceptVariants.forEach(concept => {
+          initialMastery.set(concept.conceptId, conceptMasteryScores.get(concept.conceptId) ?? 50);
+        });
+        setConceptMasteryScores(initialMastery);
         setConceptResults(initialResults);
         setQuestionQueue(initialQueue);
 
@@ -249,11 +305,19 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
           // In adaptive mode, the first pass should be treated as initial hard test
           // so wrong answers trigger remediation flow for legacy modules too.
           isInitialHardTest: isAdaptive,
+          selectionReason: isAdaptive
+            ? 'Why this question: baseline placement for this concept in adaptive mode.'
+            : undefined,
         }));
+        const initialMastery = new Map<string, number>();
+        initialQueue.forEach(item => {
+          if (item.conceptId) initialMastery.set(item.conceptId, 50);
+        });
+        setConceptMasteryScores(initialMastery);
         setQuestionQueue(initialQueue);
       }
     }
-  }, [module, questionQueue.length, isAdaptive]);
+  }, [module, questionQueue.length, isAdaptive, reasonFromTier, streak, targetTierFromScore, conceptMasteryScores]);
 
   // Current question - use AI replacement if available, otherwise pre-made
   const currentQueueItem = questionQueue[currentIndex];
@@ -341,8 +405,9 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
     }
     
     let heartsRemainingForLog = attemptHearts;
+    updateConceptMastery(conceptId, result.isCorrect, currentQueueItem.difficultyTier, responseTimeMs);
 
-    if (result.isCorrect) {
+      if (result.isCorrect) {
       // =================================================================
       // CORRECT ANSWER
       // =================================================================
@@ -389,6 +454,38 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
             return newSet;
           });
         }
+      } else if (
+        isAdaptive &&
+        !currentQueueItem.isPenalty &&
+        conceptId &&
+        module?.conceptVariants &&
+        currentQueueItem.difficultyTier < 3
+      ) {
+        // Promote to the next tier for this concept if user succeeded below hard.
+        const conceptVariant = module.conceptVariants.find(c => c.conceptId === conceptId);
+        const nextTier = (currentQueueItem.difficultyTier + 1) as 2 | 3;
+        if (conceptVariant) {
+          const nextQuestionId =
+            nextTier === 2 ? conceptVariant.mediumQuestionId : conceptVariant.hardQuestionId;
+          const nextQuestion = module.questions.find(q => q.id === nextQuestionId);
+          if (nextQuestion) {
+            setQuestionQueue(prev => [
+              ...prev,
+              {
+                question: nextQuestion,
+                isPenalty: true,
+                conceptId,
+                difficultyTier: nextTier,
+                isInitialHardTest: false,
+                penaltyPosition: nextTier === 2 ? 1 : 2,
+                selectionReason:
+                  nextTier === 3
+                    ? 'Why this question: promotion to hard after correct medium response.'
+                    : 'Why this question: promotion to medium after correct foundational response.',
+              },
+            ]);
+          }
+        }
       }
       
     } else {
@@ -433,6 +530,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
               difficultyTier: 1,
               isInitialHardTest: false,
               penaltyPosition: 0,
+              selectionReason: 'Why this question: reinforcing basics after an incorrect response.',
             });
           }
           
@@ -446,6 +544,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
               difficultyTier: 2,
               isInitialHardTest: false,
               penaltyPosition: 1,
+              selectionReason: 'Why this question: checking applied understanding before hard retry.',
             });
           }
           
@@ -459,6 +558,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
               difficultyTier: 3,
               isInitialHardTest: false,
               penaltyPosition: 2,
+              selectionReason: 'Why this question: hard retry to confirm concept mastery.',
             });
           }
           
@@ -481,6 +581,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
               // HARD slot must remain the original retry question.
               penaltyQuestions.slice(0, 2).forEach((pq, i) => {
                 const queueIdx = prev.length + i;
+                const remediationLevel = i === 0 ? 'easy' : 'medium';
                 generateConceptQuestion(
                   pq.question,
                   conceptId!,
@@ -490,12 +591,17 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
                   userCtx
                 ).then(aiQ => {
                   if (aiQ) {
-                    if (currentIndexRef.current >= queueIdx) return;
-                    console.log('[AI] Generated penalty replacement:', aiQ.id, 'for queue index', queueIdx);
+                    if (currentIndexRef.current >= queueIdx) {
+                      console.log(`[AI] ${remediationLevel} remediation generated too late; keeping premade fallback at queue index ${queueIdx}`);
+                      return;
+                    }
+                    console.log(`[AI] ${remediationLevel} remediation replaced with AI question:`, aiQ.id, 'for queue index', queueIdx);
                     setAiReplacements(prevR => ({ ...prevR, [queueIdx]: aiQ }));
+                  } else {
+                    console.log(`[AI] ${remediationLevel} remediation returned null; using premade fallback at queue index ${queueIdx}`);
                   }
                 }).catch((error) => {
-                  console.error('[AI] Failed penalty replacement generation:', error);
+                  console.error(`[AI] Failed ${remediationLevel} penalty replacement generation:`, error);
                 });
               });
             } else {
@@ -574,6 +680,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
               difficultyTier: 1,
               isInitialHardTest: false,
               penaltyPosition: 0,
+              selectionReason: 'Why this question: foundational remediation after missed concept.',
             },
             {
               question: mediumFallback || currentQuestion,
@@ -582,6 +689,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
               difficultyTier: 2,
               isInitialHardTest: false,
               penaltyPosition: 1,
+              selectionReason: 'Why this question: applied remediation before mastery retry.',
             },
             {
               question: currentQuestion,
@@ -590,6 +698,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
               difficultyTier: 3 as const,
               isInitialHardTest: false,
               penaltyPosition: 2,
+              selectionReason: 'Why this question: original hard concept retry for mastery.',
             },
           ];
 
@@ -627,9 +736,14 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
               userCtx
             ).then(aiQ => {
               if (aiQ) {
-                if (currentIndexRef.current >= queueStart) return;
-                console.log('[AI] Generated legacy easy remediation:', aiQ.id);
+                if (currentIndexRef.current >= queueStart) {
+                  console.log(`[AI] legacy easy remediation generated too late; keeping premade fallback at queue index ${queueStart}`);
+                  return;
+                }
+                console.log('[AI] legacy easy remediation replaced with AI question:', aiQ.id);
                 setAiReplacements(prevR => ({ ...prevR, [queueStart]: aiQ }));
+              } else {
+                console.log(`[AI] legacy easy remediation returned null; using premade fallback at queue index ${queueStart}`);
               }
             }).catch((error) => {
               console.error('[AI] Failed legacy easy remediation generation:', error);
@@ -644,9 +758,14 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
               userCtx
             ).then(aiQ => {
               if (aiQ) {
-                if (currentIndexRef.current >= queueStart + 1) return;
-                console.log('[AI] Generated legacy medium remediation:', aiQ.id);
+                if (currentIndexRef.current >= queueStart + 1) {
+                  console.log(`[AI] legacy medium remediation generated too late; keeping premade fallback at queue index ${queueStart + 1}`);
+                  return;
+                }
+                console.log('[AI] legacy medium remediation replaced with AI question:', aiQ.id);
                 setAiReplacements(prevR => ({ ...prevR, [queueStart + 1]: aiQ }));
+              } else {
+                console.log(`[AI] legacy medium remediation returned null; using premade fallback at queue index ${queueStart + 1}`);
               }
             }).catch((error) => {
               console.error('[AI] Failed legacy medium remediation generation:', error);
@@ -691,7 +810,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
     }).catch(() => {});
     
   }, [currentQuestion, currentQueueItem, module, gainXP, xpScale, lessonId, 
-      registerWrongAnswer, markRemediated, attemptHearts, conceptsInCascade, lessonDomain, financial, isFirstQuizAttempt, isAdaptive]);
+      registerWrongAnswer, markRemediated, attemptHearts, conceptsInCascade, lessonDomain, financial, isFirstQuizAttempt, isAdaptive, updateConceptMastery]);
 
   // ==========================================================================
   // HANDLE CONTINUE - Move to next question or complete quiz
@@ -702,24 +821,24 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   // - Legacy mode: All questions answered correctly at least once
   //
   
-  const maybeUnlockCourseCertificate = useCallback(async () => {
-    if (!courseId) return;
+  const maybeUnlockCourseCertificate = useCallback(async (): Promise<string | null> => {
+    if (!courseId) return null;
     const course = getCourseById(courseId);
-    if (!course) return;
+    if (!course) return null;
 
     const completedSet = new Set(completedLessons);
     completedSet.add(lessonId);
     const isCourseComplete = course.lessons.every(lesson => completedSet.has(lesson.id));
-    if (!isCourseComplete) return;
+    if (!isCourseComplete) return null;
 
     const unlockedNow = await unlockCertificate(courseId);
     if (unlockedNow) {
-      setNewCertificateCourseId(courseId);
-      setShowCertificateModal(true);
+      return courseId;
     }
+    return null;
   }, [completedLessons, courseId, lessonId, unlockCertificate]);
 
-  const handleContinue = useCallback(() => {
+  const handleContinue = useCallback(async () => {
     setIsAnswered(false);
 
     const getHeartsRewardFromScore = (score: number): number => {
@@ -751,14 +870,16 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       
       // Rewards are only granted on the first quiz attempt for this module.
       const earned = isFirstQuizAttempt ? getHeartsRewardFromScore(score) : 0;
+      let unlockedCertificateCourseId: string | null = null;
       if (isFirstQuizAttempt) {
         if (earned > 0) {
           addHearts(earned);
         }
         updateStreak();
-        void maybeUnlockCourseCertificate();
+        unlockedCertificateCourseId = await maybeUnlockCourseCertificate();
       }
       setHeartsEarned(earned);
+      setPendingCertificateCourseId(unlockedCertificateCourseId);
       
       // Record skill accuracy for the lesson domain
       if (lessonDomain) {
@@ -805,14 +926,16 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
       
       // Rewards are only granted on the first quiz attempt for this module.
       const earned = isFirstQuizAttempt ? getHeartsRewardFromScore(score) : 0;
+      let unlockedCertificateCourseId: string | null = null;
       if (isFirstQuizAttempt) {
         if (earned > 0) {
           addHearts(earned);
         }
         updateStreak();
-        void maybeUnlockCourseCertificate();
+        unlockedCertificateCourseId = await maybeUnlockCourseCertificate();
       }
       setHeartsEarned(earned);
+      setPendingCertificateCourseId(unlockedCertificateCourseId);
       
       // Record skill accuracy
       if (lessonDomain) {
@@ -847,14 +970,28 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
   // Handle completion dismiss
   const handleCompletionClose = useCallback(() => {
     setShowCompletion(false);
-    if (showCertificateModal) return;
+    if (pendingCertificateCourseId) {
+      setNewCertificateCourseId(pendingCertificateCourseId);
+      setPendingCertificateCourseId(null);
+      setShowCertificateModal(true);
+      return;
+    }
     navigation.goBack();
-  }, [navigation, showCertificateModal]);
+  }, [navigation, pendingCertificateCourseId]);
 
   const handleCertificateClose = useCallback(() => {
     setShowCertificateModal(false);
     setNewCertificateCourseId(null);
     navigation.goBack();
+  }, [navigation]);
+
+  const handleViewCertificateInProfile = useCallback(() => {
+    setShowCertificateModal(false);
+    setNewCertificateCourseId(null);
+    navigation.goBack();
+    requestAnimationFrame(() => {
+      navigation.getParent()?.navigate('ProfileTab' as never);
+    });
   }, [navigation]);
 
   // ==========================================================================
@@ -947,11 +1084,53 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
           )}
         </View>
         
-        {/* Show concept mastery progress in adaptive mode */}
+        {/* Concept mastery dots */}
         {module?.conceptVariants && (
-          <ThemedText style={[styles.conceptProgress, { color: theme.textSecondary }]}>
-            {masteredConcepts.size} of {module.conceptVariants.length} concepts mastered
-          </ThemedText>
+          <View style={styles.conceptDotsRow}>
+            {module.conceptVariants.map((cv, i) => {
+              const isMastered = masteredConcepts.has(cv.conceptId);
+              const isActive = currentQueueItem?.conceptId === cv.conceptId && !isMastered;
+              const shortName = cv.conceptName
+                ? cv.conceptName.split(' ')[0]
+                : `#${i + 1}`;
+              return (
+                <View key={cv.conceptId} style={styles.conceptDotItem}>
+                  <View
+                    style={[
+                      styles.conceptDot,
+                      isMastered
+                        ? { backgroundColor: '#10B981', borderColor: '#10B981' }
+                        : isActive
+                        ? { backgroundColor: theme.primary + '20', borderColor: theme.primary }
+                        : { backgroundColor: 'transparent', borderColor: theme.border },
+                    ]}
+                  >
+                    {isMastered
+                      ? <Feather name="check" size={11} color="#FFFFFF" />
+                      : isActive
+                      ? <View style={[styles.dotActivePip, { backgroundColor: theme.primary }]} />
+                      : null}
+                  </View>
+                  <ThemedText
+                    numberOfLines={1}
+                    style={[
+                      styles.conceptDotLabel,
+                      {
+                        color: isMastered
+                          ? '#10B981'
+                          : isActive
+                          ? theme.primary
+                          : theme.textSecondary,
+                        fontWeight: isActive ? '700' : '400',
+                      },
+                    ]}
+                  >
+                    {shortName}
+                  </ThemedText>
+                </View>
+              );
+            })}
+          </View>
         )}
         
         {/* Show practice indicator for penalty cascade */}
@@ -960,6 +1139,12 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
             Review Question
           </ThemedText>
         )}
+
+        {isAdaptive && currentQueueItem?.selectionReason ? (
+          <ThemedText style={[styles.whyLabel, { color: theme.textSecondary }]}>
+            {currentQueueItem.selectionReason}
+          </ThemedText>
+        ) : null}
 
         {/* AI-generated question indicator */}
         {currentQuestion && currentQuestion.id.startsWith('ai-') && (
@@ -1188,6 +1373,10 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
               if (!course) return null;
               return (
                 <>
+                  <ThemedText style={[styles.certificateCourseHeader, { color: course.color }]}>
+                    {course.title}
+                  </ThemedText>
+                  <Spacer height={Spacing.md} />
                   <View style={[styles.certificateIconBadge, { backgroundColor: course.color + '20' }]}>
                     <Feather name={course.icon as any} size={48} color={course.color} />
                   </View>
@@ -1195,17 +1384,24 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
                   <ThemedText style={styles.certificateTitle}>Certificate Unlocked!</ThemedText>
                   <Spacer height={Spacing.sm} />
                   <ThemedText style={[styles.certificateSubtitle, { color: theme.textSecondary }]}>
-                    Congratulations! You completed
+                    Congratulations! You finished the full course and earned a certificate for
                   </ThemedText>
                   <ThemedText style={[styles.certificateCourseName, { color: course.color }]}>
                     {course.title}
                   </ThemedText>
                   <Spacer height={Spacing.lg} />
                   <Pressable
-                    onPress={handleCertificateClose}
+                    onPress={handleViewCertificateInProfile}
                     style={[styles.completeButton, { backgroundColor: theme.primary }]}
                   >
-                    <ThemedText style={styles.completeButtonText}>Awesome</ThemedText>
+                    <ThemedText style={styles.completeButtonText}>View in Profile</ThemedText>
+                  </Pressable>
+                  <Spacer height={Spacing.md} />
+                  <Pressable
+                    onPress={handleCertificateClose}
+                    style={[styles.secondaryButton, { borderColor: theme.border }]}
+                  >
+                    <ThemedText style={[styles.secondaryButtonText, { color: theme.text }]}>Back to Course</ThemedText>
                   </Pressable>
                 </>
               );
@@ -1284,11 +1480,49 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: Spacing.xs,
   },
+  conceptDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    gap: Spacing.xl,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
+  },
+  conceptDotItem: {
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 48,
+  },
+  conceptDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dotActivePip: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  conceptDotLabel: {
+    ...Typography.caption,
+    fontSize: 10,
+    textAlign: 'center',
+    maxWidth: 52,
+  },
   practiceLabel: {
     ...Typography.footnote,
     fontWeight: '600',
     textAlign: 'center',
     marginTop: Spacing.xs,
+  },
+  whyLabel: {
+    ...Typography.caption,
+    textAlign: 'center',
+    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
   },
   aiBadgeContainer: {
     alignItems: 'center',
@@ -1371,6 +1605,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  certificateCourseHeader: {
+    ...Typography.title,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   certificateTitle: {
     ...Typography.largeTitle,
     fontWeight: '700',
@@ -1434,6 +1673,17 @@ const styles = StyleSheet.create({
   completeButtonText: {
     ...Typography.headline,
     color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    width: '100%',
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  secondaryButtonText: {
+    ...Typography.headline,
     fontWeight: '600',
   },
   reviewNotice: {
