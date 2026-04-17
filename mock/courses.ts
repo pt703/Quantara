@@ -31,8 +31,119 @@ import {
   ContentBlock,
   ConceptVariant,
 } from '../types';
+import { compactCourses } from './compactCourses';
+
+const USE_LEGACY_CURRICULUM =
+  (process.env.EXPO_PUBLIC_USE_LEGACY_CURRICULUM || 'false').toLowerCase() === 'true';
 
 type RawLesson = Omit<Lesson, 'modules'>;
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function moveItem<T>(items: T[], fromIndex: number, toIndex: number): T[] {
+  const next = [...items];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+}
+
+function buildLessonAnswerTargets(lessonId: string, scorableCount: number): number[] {
+  let seed = hashString(`${lessonId}-answer-seed`) || 1;
+  const nextRand = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed;
+  };
+
+  const targets: number[] = [];
+  for (let index = 0; index < scorableCount; index += 1) {
+    const previous = targets[targets.length - 1];
+    const twoBack = targets[targets.length - 2];
+    const threeBack = targets[targets.length - 3];
+    const attempts = [0, 1, 2, 3].map(() => nextRand() % 4);
+    const fallbackSlots = [0, 1, 2, 3];
+
+    const selected = [...attempts, ...fallbackSlots].find((slot) => {
+      if (slot === previous && slot === twoBack) return false;
+      if (
+        targets.length >= 3 &&
+        previous !== undefined &&
+        twoBack !== undefined &&
+        threeBack !== undefined &&
+        previous === threeBack &&
+        slot === twoBack &&
+        slot !== previous
+      ) {
+        return false;
+      }
+      return true;
+    }) ?? (nextRand() % 4);
+
+    targets.push(selected);
+  }
+  return targets;
+}
+
+function repositionQuestionOptions(question: Question, targetIndex: number): Question {
+  if (question.type === 'mcq') {
+    return {
+      ...question,
+      options: moveItem(question.options, question.correctAnswer, targetIndex),
+      correctAnswer: targetIndex,
+    };
+  }
+
+  if (question.type === 'scenario') {
+    return {
+      ...question,
+      options: moveItem(question.options, question.bestOptionIndex, targetIndex),
+      bestOptionIndex: targetIndex,
+    };
+  }
+
+  return question;
+}
+
+function shuffleLessonQuestions(lesson: Lesson): Lesson {
+  const scorableCount = lesson.questions.filter(
+    question => question.type === 'mcq' || question.type === 'scenario'
+  ).length;
+  const lessonTargets = buildLessonAnswerTargets(lesson.id, scorableCount);
+  let scorableIndex = 0;
+  const rebalanceQuestion = (question: Question): Question => {
+    if (question.type !== 'mcq' && question.type !== 'scenario') {
+      return question;
+    }
+
+    const targetIndex = lessonTargets[scorableIndex] ?? (hashString(`${lesson.id}-${question.id}`) % 4);
+    scorableIndex += 1;
+    return repositionQuestionOptions(question, targetIndex);
+  };
+
+  return {
+    ...lesson,
+    questions: lesson.questions.map(rebalanceQuestion),
+    modules: lesson.modules?.map(module => {
+      if (module.type !== 'quiz') return module;
+      return {
+        ...module,
+        questions: module.questions.map(rebalanceQuestion),
+      };
+    }),
+  };
+}
+
+function applyQuestionOptionShuffling(courseList: Course[]): Course[] {
+  return courseList.map(course => ({
+    ...course,
+    lessons: course.lessons.map(shuffleLessonQuestions),
+  }));
+}
 
 // =============================================================================
 // MODULE GENERATION HELPER
@@ -3427,11 +3538,19 @@ export const investingCourse: Course = {
 };
 
 // All courses array
-export const courses: Course[] = [
+export const legacyCourses: Course[] = [
   moneyFoundationsCourse,
   creditDebtCourse,
   investingCourse,
 ];
+
+// Active curriculum (compact evaluation-aligned version).
+// Toggle with EXPO_PUBLIC_USE_LEGACY_CURRICULUM=true|false
+// - true  => use legacy (full) curriculum
+// - false => use compact evaluation-aligned curriculum
+export const courses: Course[] = applyQuestionOptionShuffling(
+  USE_LEGACY_CURRICULUM ? legacyCourses : compactCourses
+);
 
 // Export helper to get a course by ID
 export function getCourseById(id: string): Course | undefined {

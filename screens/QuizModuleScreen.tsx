@@ -792,7 +792,7 @@ export default function QuizModuleScreen({ navigation, route }: QuizModuleScreen
               userCtx
             ).then(aiQ => {
               if (aiQ) {
-                if (currentIndexRef.current >= queueStart + 1) {
+                if (currentIndexRef.current > queueStart + 1) {
                   console.log(`[AI] legacy medium remediation generated too late; keeping premade fallback at queue index ${queueStart + 1}`);
                   return;
                 }

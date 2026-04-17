@@ -55,6 +55,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  const getEmailRedirectUrl = useCallback(() => {
+    if (Platform.OS === 'web') {
+      return typeof window !== 'undefined' && window.location ? window.location.origin : undefined;
+    }
+    return makeRedirectUri({ scheme: 'quantara', path: 'auth/callback' });
+  }, []);
+
   const signUp = useCallback(async (email: string, password: string) => {
     if (!isSupabaseConfigured) {
       return { error: new Error('Supabase is not configured. Please check your environment variables.') };
@@ -62,9 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     setIsAuthenticating(true);
     try {
-      const redirectUrl = Platform.OS === 'web' 
-        ? (typeof window !== 'undefined' && window.location ? window.location.origin : undefined)
-        : 'https://1fc63d4e-6d35-4ee3-8df8-3a15e59444e6-00-3t0em6mh6h2bl.worf.replit.dev';
+      const redirectUrl = getEmailRedirectUrl();
       
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -89,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsAuthenticating(false);
     }
-  }, []);
+  }, [getEmailRedirectUrl]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (!isSupabaseConfigured) {
@@ -140,12 +145,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: getEmailRedirectUrl(),
+      });
       return { error };
     } catch (e) {
       return { error: e as Error };
     }
-  }, []);
+  }, [getEmailRedirectUrl]);
 
   const signInWithGoogle = useCallback(async () => {
     if (!isSupabaseConfigured) {

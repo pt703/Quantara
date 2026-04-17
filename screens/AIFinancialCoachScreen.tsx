@@ -178,6 +178,19 @@ export default function AIFinancialCoachScreen() {
         ) : null}
       </ScrollView>
 
+      <ThemedView
+        style={[
+          styles.disclaimerCard,
+          { backgroundColor: theme.primary + '10', borderColor: theme.primary + '30' },
+        ]}
+      >
+        <Feather name="info" size={14} color={theme.primary} />
+        <Spacer width={Spacing.sm} />
+        <ThemedText style={[styles.disclaimerText, { color: theme.textSecondary }]}>
+          Educational only. Not financial advice. Consider your own circumstances before acting.
+        </ThemedText>
+      </ThemedView>
+
       <ThemedView style={[styles.starterCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <ThemedText style={[styles.starterTitle, { color: theme.textSecondary }]}>
           Try asking:
@@ -275,6 +288,21 @@ const styles = StyleSheet.create({
   },
   typingText: {
     ...Typography.caption,
+  },
+  disclaimerCard: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  disclaimerText: {
+    ...Typography.caption,
+    flex: 1,
+    lineHeight: 18,
   },
   starterCard: {
     marginHorizontal: Spacing.lg,

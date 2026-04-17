@@ -222,11 +222,12 @@ User's Financial Context (use these real numbers to personalize the question):
       console.error('Failed to generate question');
       return null;
     }
+    const normalized = normalizeGeneratedQuestion(generated);
 
     const questionId = `ai-${conceptId}-${Date.now()}`;
     const difficultyTier = getDifficultyTier(adaptedDifficulty);
 
-    return formatQuestion(generated, {
+    return formatQuestion(normalized, {
       id: questionId,
       conceptId,
       variantGroup: `ai-${conceptId}`,
@@ -292,6 +293,13 @@ Guidelines:
 - Ensure the question tests understanding, not just memorization
 - The explanation should teach why the answer is correct
 - Use simple, clear language
+- Keep the question SHORT and mobile-friendly
+- Avoid long setups and walls of text
+- Question stem max 18 words
+- Scenario text max 28 words
+- Explanation max 2 short sentences
+- Each answer option max 9 words
+- Do not use filler phrases or repeated context
 `;
 
   switch (questionType) {
@@ -299,6 +307,7 @@ Guidelines:
       return `${baseContext}
 
 Generate a multiple choice question with 4 options where exactly ONE is correct.
+Make the correct option position varied. Do not default to the second option.
 Respond with JSON in this exact format:
 \`\`\`json
 {
@@ -348,6 +357,7 @@ Respond with JSON in this exact format:
       return `${baseContext}
 
 Generate a scenario-based decision question with 4 choices.
+Keep both the question and scenario concise for a mobile screen.
 Each choice should have a realistic outcome and impact score (-100 to +100).
 One choice should be clearly the best financial decision.
 Respond with JSON in this exact format:
@@ -366,6 +376,87 @@ Respond with JSON in this exact format:
   "explanation": "Why the best choice is optimal"
 }
 \`\`\``;
+  }
+}
+
+function trimSentence(text: string, maxWords: number): string {
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  const words = cleaned.split(' ').filter(Boolean);
+  if (words.length <= maxWords) return cleaned;
+  return `${words.slice(0, maxWords).join(' ').replace(/[,:;]$/, '')}...`;
+}
+
+function trimExplanation(text: string): string {
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  const sentences = cleaned
+    .split(/(?<=[.!?])\s+/)
+    .map(sentence => sentence.trim())
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(sentence => trimSentence(sentence, 16));
+
+  return sentences.join(' ');
+}
+
+function sanitizeOptionText(text: string): string {
+  return trimSentence(text.replace(/\s+/g, ' ').trim(), 9);
+}
+
+function shuffleWithCorrectIndex<T>(items: T[], correctIndex: number): { items: T[]; correctIndex: number } {
+  const indexed = items.map((item, index) => ({ item, index, sortKey: Math.random() }));
+  indexed.sort((a, b) => a.sortKey - b.sortKey);
+  return {
+    items: indexed.map(entry => entry.item),
+    correctIndex: indexed.findIndex(entry => entry.index === correctIndex),
+  };
+}
+
+function normalizeGeneratedQuestion(generated: GeneratedQuestion): GeneratedQuestion {
+  switch (generated.type) {
+    case 'mcq': {
+      const shuffled = shuffleWithCorrectIndex(
+        generated.options.map(option => sanitizeOptionText(option)),
+        generated.correctAnswer
+      );
+      return {
+        ...generated,
+        question: trimSentence(generated.question, 18),
+        options: shuffled.items,
+        correctAnswer: shuffled.correctIndex,
+        explanation: trimExplanation(generated.explanation),
+      };
+    }
+    case 'true_false':
+      return {
+        ...generated,
+        question: trimSentence(generated.question, 18),
+        explanation: trimExplanation(generated.explanation),
+      };
+    case 'calculation':
+      return {
+        ...generated,
+        question: trimSentence(generated.question, 16),
+        problemText: trimSentence(generated.problemText, 24),
+        explanation: trimExplanation(generated.explanation),
+      };
+    case 'scenario': {
+      const shuffled = shuffleWithCorrectIndex(
+        generated.options.map(option => ({
+          ...option,
+          text: sanitizeOptionText(option.text),
+          outcome: trimSentence(option.outcome, 12),
+        })),
+        generated.bestOptionIndex
+      );
+      return {
+        ...generated,
+        question: trimSentence(generated.question, 16),
+        scenario: trimSentence(generated.scenario, 28),
+        options: shuffled.items,
+        bestOptionIndex: shuffled.correctIndex,
+        explanation: trimExplanation(generated.explanation),
+      };
+    }
   }
 }
 
@@ -521,13 +612,14 @@ User's Financial Context:
   try {
     const generated = await generateJSON<GeneratedQuestion>(prompt);
     if (!generated) return null;
+    const normalized = normalizeGeneratedQuestion(generated);
 
     const questionId = `ai-concept-${conceptId}-${difficulty}-${Date.now()}`;
     const difficultyTier = getDifficultyTier(adaptedDifficulty);
 
     console.log(`[AI] Generated ${difficulty} question for concept "${conceptName}"`);
 
-    return formatQuestion(generated, {
+    return formatQuestion(normalized, {
       id: questionId,
       conceptId,
       variantGroup: `ai-${conceptId}`,
@@ -643,10 +735,11 @@ Respond with JSON:
       console.error('Failed to generate similar question');
       return null;
     }
+    const normalized = normalizeGeneratedQuestion(generated);
 
     const questionId = `ai-similar-${originalQuestion.id}-${Date.now()}`;
     
-    return formatQuestion(generated, {
+    return formatQuestion(normalized, {
       id: questionId,
       conceptId: originalQuestion.conceptId || 'general',
       variantGroup: originalQuestion.variantGroup || `similar-${originalQuestion.id}`,

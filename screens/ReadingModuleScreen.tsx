@@ -143,6 +143,27 @@ function ContentBlockRenderer({ block, index, theme }: ContentBlockRendererProps
     );
   }
 
+  const chunkParagraph = (paragraph: string): string[] => {
+    const trimmed = paragraph.trim();
+    if (trimmed.length <= 140) return [trimmed];
+    const sentences = trimmed.split(/(?<=[.!?])\s+/).filter(Boolean);
+    if (sentences.length <= 2) return [trimmed];
+
+    const chunks: string[] = [];
+    let current = '';
+    sentences.forEach((sentence) => {
+      const candidate = current ? `${current} ${sentence}` : sentence;
+      if (candidate.length > 200 && current) {
+        chunks.push(current.trim());
+        current = sentence;
+      } else {
+        current = candidate;
+      }
+    });
+    if (current.trim()) chunks.push(current.trim());
+    return chunks;
+  };
+
   // Parse content to handle markdown-like formatting
   const renderContent = (content: string) => {
     // Split content into paragraphs
@@ -155,22 +176,59 @@ function ContentBlockRenderer({ block, index, theme }: ContentBlockRendererProps
         return (
           <View key={pIndex} style={styles.bulletList}>
             {items.map((item, iIndex) => (
-              <View key={iIndex} style={styles.bulletItem}>
-                <View style={[styles.bulletDot, { backgroundColor: theme.primary }]} />
-                <ThemedText style={styles.bulletText}>
-                  {item.replace(/^[-*]\s*/, '')}
-                </ThemedText>
-              </View>
+              (() => {
+                const cleaned = item.replace(/^[-*]\s*/, '').trim();
+                if (cleaned.toLowerCase().startsWith('equation:')) {
+                  return (
+                    <View key={iIndex} style={[styles.equationWrap, { backgroundColor: theme.primary + '12' }]}>
+                      <ThemedText style={[styles.equationLabel, { color: theme.primary }]}>Equation</ThemedText>
+                      <ThemedText style={styles.equationText}>
+                        {cleaned.replace(/^Equation:\s*/i, '')}
+                      </ThemedText>
+                    </View>
+                  );
+                }
+                return (
+                  <View key={iIndex} style={styles.bulletItem}>
+                    <View style={[styles.bulletDot, { backgroundColor: theme.primary }]} />
+                    <ThemedText style={styles.bulletText}>
+                      {cleaned}
+                    </ThemedText>
+                  </View>
+                );
+              })()
             ))}
           </View>
         );
       }
+
+      // Render equation callouts in a centered standout style.
+      if (paragraph.trim().startsWith('Equation:')) {
+        const equationText = paragraph.replace(/^Equation:\s*/i, '').trim();
+        return (
+          <View key={pIndex} style={[styles.equationWrap, { backgroundColor: theme.primary + '12' }]}>
+            <ThemedText style={[styles.equationLabel, { color: theme.primary }]}>Equation</ThemedText>
+            <ThemedText style={styles.equationText}>{equationText}</ThemedText>
+          </View>
+        );
+      }
       
-      // Regular paragraph
+      // Regular paragraph (auto-split long chunks for readability)
+      const chunks = chunkParagraph(paragraph);
       return (
-        <ThemedText key={pIndex} style={[styles.contentText, pIndex > 0 && styles.paragraphSpacing]}>
-          {paragraph}
-        </ThemedText>
+        <View key={pIndex}>
+          {chunks.map((chunk, cIndex) => (
+            <ThemedText
+              key={`${pIndex}-${cIndex}`}
+              style={[
+                styles.contentText,
+                (pIndex > 0 || cIndex > 0) && styles.paragraphSpacing,
+              ]}
+            >
+              {chunk}
+            </ThemedText>
+          ))}
+        </View>
       );
     });
   };
@@ -540,7 +598,7 @@ const styles = StyleSheet.create({
   },
   contentText: {
     ...Typography.body,
-    lineHeight: 26,
+    lineHeight: 23,
   },
   paragraphSpacing: {
     marginTop: Spacing.sm,
@@ -563,7 +621,27 @@ const styles = StyleSheet.create({
   bulletText: {
     ...Typography.body,
     flex: 1,
-    lineHeight: 24,
+    lineHeight: 22,
+  },
+  equationWrap: {
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    marginVertical: Spacing.xs,
+  },
+  equationLabel: {
+    ...Typography.caption,
+    textAlign: 'center',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  equationText: {
+    ...Typography.headline,
+    textAlign: 'center',
+    fontWeight: '700',
+    lineHeight: 28,
   },
   bottomBar: {
     position: 'absolute',
