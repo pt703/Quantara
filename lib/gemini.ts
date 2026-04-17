@@ -100,20 +100,8 @@ async function executeRequest(prompt: string): Promise<string | null> {
         console.log('[Gemini] Rate limited after all retries. Entering 60s cooldown.');
         return null;
       }
-
-      if (status === 503) {
-        if (attempt < MAX_RETRIES) {
-          const retryDelay = 3000 * (attempt + 1);
-          console.log(`[Gemini] Server overloaded, retrying in ${retryDelay / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})`);
-          await sleep(retryDelay);
-          lastRequestTime = Date.now();
-          continue;
-        }
-        console.warn('[Gemini] Server overloaded after all retries, using fallback.');
-        return null;
-      }
-
-      console.warn(`[Gemini] Error (attempt ${attempt + 1}):`, error?.message || error);
+      
+      console.error(`[Gemini] Error (attempt ${attempt + 1}):`, error?.message || error);
       return null;
     }
   }
@@ -166,7 +154,7 @@ export async function generateJSON<T>(prompt: string): Promise<T | null> {
     
     return JSON.parse(jsonString.trim()) as T;
   } catch (error) {
-    console.warn('[Gemini] Error parsing JSON response:', error);
+    console.error('[Gemini] Error parsing JSON response:', error);
     return null;
   }
 }
